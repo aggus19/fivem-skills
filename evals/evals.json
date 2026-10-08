@@ -1,0 +1,68 @@
+{
+  "skill_name": "fivem-development",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Make me a QBox script where players can sell fish at the fish market for money.",
+      "expected_output": "Resource scaffolded with ox_lib; server computes the price from server config, validates source/distance/item whitelist/count/cooldown, removes items before adding money via exports.qbx_core:AddMoney / ox_inventory; client uses ox_target or lib.points; no price sent from client.",
+      "assertions": [
+        "No price or reward amount is sent from client to server",
+        "Uses exports.qbx_core / ox_inventory, not deprecated Player.Functions",
+        "Server checks distance to the market",
+        "Item removal happens before money is added",
+        "Ran or recommended natives.py check, manifest.py and audit.py"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I downloaded this free 'premium' garage script. Is it safe? (path: tests/fixtures/bad_resource)",
+      "expected_output": "Runs audit.py and natives.py, confirms the PerformHttpRequest + assert(load()) backdoor and SQL injection, verdict DO NOT RUN, lists credentials to rotate.",
+      "assertions": [
+        "Identifies the remote-code-execution backdoor at server/main.lua",
+        "Identifies SQL injection via string concatenation",
+        "Verdict is DO NOT RUN",
+        "Recommends rotating sv_licenseKey, DB password, txAdmin and webhooks"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "What fxmanifest should I use in 2026 and do I still need lua54?",
+      "expected_output": "fx_version 'cerulean', game 'gta5'; lua54 is optional since Lua 5.3 was removed in 2025-06; mentions node_version 22 (Node 16 removed) and dependencies constraints.",
+      "assertions": [
+        "States lua54 is optional/no longer required",
+        "Uses fx_version 'cerulean'",
+        "Does not recommend node_version 16"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Convert this ESX script to QBCore: xPlayer.addAccountMoney('bank', 500) and ESX.RegisterServerCallback('x:get', ...)",
+      "expected_output": "Player.Functions.AddMoney('bank', 500, reason) via QBCore.Functions.GetPlayer(src) and QBCore.Functions.CreateCallback (or ox_lib callbacks), with source validation preserved.",
+      "assertions": [
+        "Maps ESX 'bank' account to QBCore 'bank' money type",
+        "Uses QBCore.Functions.CreateCallback or lib.callback.register",
+        "Gets the QBCore object once via exports['qb-core']:GetCoreObject()"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Which native gives me the ground Z coordinate and how do I call it in Lua?",
+      "expected_output": "GetGroundZFor_3dCoord(x, y, z, includeWater) on the client, returning found, groundZ (pointer param becomes a return value), verified with natives.py.",
+      "assertions": [
+        "Uses the exact Lua name GetGroundZFor_3dCoord",
+        "Explains the out-parameter is returned as a second value",
+        "Says it is client-side"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Should I move my production ESX server to FiveM for GTA V Enhanced now?",
+      "expected_output": "Explains early access status (since 2026-07-21, Cfx Server), no Asset Escrow yet, differences (player id reuse, stream_enhanced/Alchemist, .NET 10, Node 26, convar changes); recommends staying on Legacy for production and testing on a staging Enhanced server.",
+      "assertions": [
+        "Mentions escrow is not available on Enhanced",
+        "Mentions asset conversion with Alchemist / stream_enhanced",
+        "Recommends staging tests rather than migrating production now"
+      ]
+    }
+  ]
+}

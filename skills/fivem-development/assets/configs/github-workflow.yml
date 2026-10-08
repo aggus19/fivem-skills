@@ -1,0 +1,41 @@
+# Copy to .github/workflows/fivem-ci.yml in your resources repository.
+# Assumes the skill's scripts are vendored at tools/fivem-skill/scripts (or adjust SKILL_SCRIPTS).
+name: fivem-ci
+on: [push, pull_request]
+env:
+  SKILL_SCRIPTS: tools/fivem-skill/scripts
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Manifests
+        run: |
+          for m in $(find resources -name fxmanifest.lua -not -path "*/node_modules/*"); do
+            python -I "$SKILL_SCRIPTS/manifest.py" "$(dirname "$m")"
+          done
+      - name: Security audit (fails on high/critical)
+        run: python -I "$SKILL_SCRIPTS/audit.py" resources --min high
+      - name: Natives
+        run: python -I "$SKILL_SCRIPTS/natives.py" check resources --strict
+      - name: StyLua
+        uses: JohnnyMorganz/stylua-action@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: 2.5.2 # pin: formatting can change between releases
+          args: --check resources
+  nui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Build every web/ UI
+        run: |
+          for p in $(find resources -path "*/web/package.json" -not -path "*/node_modules/*"); do
+            (cd "$(dirname "$p")" && npm ci && npm run build)
+          done

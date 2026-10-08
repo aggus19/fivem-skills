@@ -1,0 +1,33 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #f2f2f2;
+}
+/* The NUI frame is transparent: never paint a full-screen background unless the UI is open. */
+html,
+body,
+#root {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+}
+.panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 320px;
+  padding: 24px;
+  border-radius: 12px;
+  background: rgba(20, 20, 24, 0.92);
+  display: grid;
+  gap: 12px;
+}
+.panel button {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #3a7bfd;
+  color: white;
+  cursor: pointer;
+}

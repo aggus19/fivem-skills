@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime.version": "Lua 5.4",
+  "runtime.nonstandardSymbol": ["/**/", "`", "+=", "-=", "*=", "/=", "<<=", ">>=", "&=", "|=", "^="],
+  "workspace.checkThirdParty": "Ask",
+  "workspace.userThirdParty": ["C:/dev/lua-addons"],
+  "workspace.library": [],
+  "workspace.ignoreDir": [".vscode", ".git", ".github", "node_modules", "web"],
+  "diagnostics.globals": ["lib", "cache", "locale", "source", "Config", "ServerConfig", "Bridge", "MySQL", "ESX", "QBCore", "QBX"],
+  "completion.callSnippet": "Replace"
+}

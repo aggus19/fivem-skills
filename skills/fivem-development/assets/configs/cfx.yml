@@ -1,0 +1,50 @@
+---
+# selene standard library for FiveM (CfxLua 5.4). Extends the Lua 5.4 std.
+base: lua54
+name: cfx
+globals:
+  CreateThread: { args: [{ type: function }] }
+  Wait: { args: [{ type: number }] }
+  SetTimeout: { args: [{ type: number }, { type: function }] }
+  AddEventHandler: { args: [{ type: string }, { type: function }] }
+  RegisterNetEvent: { args: [{ type: string }, { type: function, required: false }] }
+  TriggerEvent: { args: [{ type: string }, { type: "..." }] }
+  TriggerServerEvent: { args: [{ type: string }, { type: "..." }] }
+  TriggerClientEvent: { args: [{ type: string }, { type: any }, { type: "..." }] }
+  RegisterNUICallback: { args: [{ type: string }, { type: function }] }
+  SendNUIMessage: { args: [{ type: table }] }
+  RegisterNuiCallback: { args: [{ type: string }, { type: function }] }
+  ClearTimeout: { args: [{ type: number }] }
+  joaat: { args: [{ type: string }, { type: bool, required: false }] }
+  defer: { args: [{ type: function }] }
+  each: { args: [{ type: any }] }
+  norm: { args: [{ type: any }] }
+  dot: { args: [{ type: any }, { type: any }] }
+  cross: { args: [{ type: any }, { type: any }] }
+  inv: { args: [{ type: any }] }
+  slerp: { args: [{ type: any }, { type: any }, { type: number }] }
+  msgpack: { property: read-only }
+  RegisterCommand: { args: [{ type: string }, { type: function }, { type: bool, required: false }] }
+  vec: { args: [{ type: "..." }] }
+  vec2: { args: [{ type: number }, { type: number }] }
+  vec3: { args: [{ type: number }, { type: number }, { type: number }] }
+  vec4: { args: [{ type: number }, { type: number }, { type: number }, { type: number }] }
+  vector2: { args: [{ type: number }, { type: number }] }
+  vector3: { args: [{ type: number }, { type: number }, { type: number }] }
+  vector4: { args: [{ type: number }, { type: number }, { type: number }, { type: number }] }
+  quat: { args: [{ type: "..." }] }
+  json: { property: read-only }
+  json.encode: { args: [{ type: any }, { type: table, required: false }] }
+  json.decode: { args: [{ type: string }] }
+  exports: { property: new-fields }
+  Citizen: { property: read-only }
+  GlobalState: { property: new-fields }
+  LocalPlayer: { property: read-only }
+  Player: { args: [{ type: any }] }
+  Entity: { args: [{ type: number }] }
+  lib: { property: new-fields }
+  cache: { property: new-fields }
+  locale: { args: [{ type: string }, { type: "..." }] }
+  MySQL: { property: new-fields }
+  source: { property: read-only }
+  promise: { property: read-only }

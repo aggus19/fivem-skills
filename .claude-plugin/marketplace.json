@@ -1,0 +1,21 @@
+{
+  "name": "fivem-skills",
+  "description": "FiveM development skills for AI coding agents",
+  "owner": {
+    "name": "fivem-skills"
+  },
+  "plugins": [
+    {
+      "name": "fivem-development",
+      "source": "./",
+      "description": "FiveM (Cfx.re) development skill: CfxLua, natives, OneSync, NUI, ox_lib/oxmysql/ox_inventory/ox_target, Qbox/QBCore/ESX, server ops, GTA V Enhanced and security audits. Baseline 2026-10-07.",
+      "version": "1.1.0",
+      "category": "development",
+      "tags": [
+        "fivem",
+        "lua",
+        "gamedev"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+# server.cfg baseline (2026-10). See references/server-ops.md.
+endpoint_add_tcp "0.0.0.0:30120"
+endpoint_add_udp "0.0.0.0:30120"
+
+sv_hostname "My Server"
+sets sv_projectName "My Project"
+sets sv_projectDesc "Short description"
+sets locale "es-ES"
+sets tags "roleplay"
+sv_maxclients 48
+sv_enforceGameBuild 3889
+
+# Secrets live in a gitignored file:  set sv_licenseKey / set mysql_connection_string / webhooks
+exec secrets.cfg
+
+setr ox:locale "es"
+set mysql_slow_query_warning 150
+set sv_entityLockdown relaxed        # move to strict once every resource spawns entities server-side
+setr sv_stateBagStrictMode true
+
+ensure mapmanager
+ensure spawnmanager
+ensure hardcap
+ensure chat
+
+ensure oxmysql
+ensure ox_lib
+ensure qbx_core                      # or es_extended / qb-core
+ensure ox_target
+ensure ox_inventory
+ensure pma-voice
+ensure [standalone]
+ensure [custom]
+
+add_ace group.admin command allow
+add_ace group.admin command.quit deny
+# add_principal identifier.license:XXXXXXXX group.admin
