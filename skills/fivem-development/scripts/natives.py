@@ -234,7 +234,17 @@ def cmd_check(args) -> int:
     return 1 if problems else 0
 
 
+def _safe_console():
+    """Never crash on consoles that cannot encode a character (Windows cp1252, redirected pipes)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main() -> int:
+    _safe_console()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("update", help="download/refresh the native DB cache")

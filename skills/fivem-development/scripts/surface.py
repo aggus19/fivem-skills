@@ -10,7 +10,9 @@ Entry points (Lua): RegisterNetEvent (inline and split with AddEventHandler),
 RegisterServerEvent + AddEventHandler, lib.callback.register,
 ESX.RegisterServerCallback, QBCore.Functions.CreateCallback, custom wrappers
 named *.Register*Event/*.Register*Callback, RegisterCommand, ESX.RegisterCommand,
-lib.addCommand, exports(...), SetHttpHandler. JS: onNet, exports, RegisterCommand.
+lib.addCommand, QBCore/Qbox Commands.Add, exports(...), SetHttpHandler, vRP/Creative tunnel methods
+(Tunnel.bindInterface). JS: onNet, exports, RegisterCommand. Sinks cover ESX, QBCore/Qbox, ND, ox_core
+accounts and vRP/Creative money, item and group calls.
 
 Sinks (what the handler can change), followed into same-resource helper
 functions up to two calls deep: money, items, vehicles, jobs/permissions, SQL
@@ -157,7 +159,7 @@ LUA_ENTRY = [
     ('callback', re.compile(r'\blib\.callback\.register\s*\(\s*' + NAME + r'\s*,\s*')),
     ('callback', re.compile(r'\bESX\.RegisterServerCallback\s*\(\s*' + NAME + r'\s*,\s*')),
     ('callback', re.compile(r'\b[\w.]*Functions\.CreateCallback\s*\(\s*' + NAME + r'\s*,\s*')),
-    ('command', re.compile(r'\b(?:RegisterCommand|ESX\.RegisterCommand)\s*\(\s*' + NAME + r'\s*,\s*')),
+    ('command', re.compile(r'\b(?:RegisterCommand|ESX\.RegisterCommand|[\w.]*Commands\.Add)\s*\(\s*' + NAME + r'\s*,\s*')),
     ('command', re.compile(r'\blib\.addCommand\s*\(\s*(?:\{\s*)?' + NAME + r'[^,]*,\s*')),
     ('export', re.compile(r'(?<![\w.:])exports\s*\(\s*' + NAME + r'\s*,\s*')),
     ('http', re.compile(r'\bSetHttpHandler\s*\(\s*()')),
@@ -165,6 +167,7 @@ LUA_ENTRY = [
 # Custom wrappers such as Phone.API.RegisterServerEvent('x', function(src, ...)
 LUA_CUSTOM = re.compile(r'\b([\w]+(?:[.:][\w]+)+)\s*\(\s*' + NAME + r'\s*,\s*(?=function\b)')
 CUSTOM_NAME = re.compile(r'Register\w*(Event|Callback)|Create\w*Callback|On\w*Event', re.I)
+TUNNEL_BIND = re.compile(r'\bTunnel\.bindInterface\s*\(\s*' + NAME + r'\s*,\s*([A-Za-z_]\w*)')
 LUA_SPLIT_REG = re.compile(r'\b(?:RegisterNetEvent|RegisterServerEvent)\s*\(\s*' + NAME + r'\s*\)')
 LUA_HANDLER = re.compile(r'\bAddEventHandler\s*\(\s*' + NAME + r'\s*,\s*')
 JS_ENTRY = [
@@ -174,12 +177,17 @@ JS_ENTRY = [
 ]
 
 SINKS = [
-    ('money+', re.compile(r'[.:](addAccountMoney|addMoney|AddMoney|addBank)\s*\(|Functions\.AddMoney\s*\(')),
-    ('money-', re.compile(r'[.:](removeAccountMoney|removeMoney|RemoveMoney|setAccountMoney|setMoney|SetMoney)\s*\(|Functions\.(RemoveMoney|SetMoney)\s*\(')),
-    ('item+', re.compile(r'[.:](addInventoryItem|AddItem|GiveItem)\s*\(|Functions\.AddItem\s*\(')),
-    ('item-', re.compile(r'[.:](removeInventoryItem|RemoveItem)\s*\(|Functions\.RemoveItem\s*\(')),
+    ('money+', re.compile(r'[.:](addAccountMoney|addMoney|AddMoney|addBank|addBalance|depositMoney)\s*\(|Functions\.AddMoney\s*\('
+                          r'|\bvRP\.(giveMoney|giveBankMoney|giveDiamonds|addBank|giveWallet)\s*\(')),
+    ('money-', re.compile(r'[.:](removeAccountMoney|removeMoney|RemoveMoney|setAccountMoney|setMoney|SetMoney|removeBalance|transferBalance|withdrawMoney)\s*\('
+                          r'|Functions\.(RemoveMoney|SetMoney)\s*\(|\bvRP\.(tryPayment|tryFullPayment|paymentBank|paymentFull|removeBank|setMoney)\s*\(')),
+    ('item+', re.compile(r'[.:](addInventoryItem|AddItem|GiveItem)\s*\(|Functions\.AddItem\s*\('
+                         r'|\bvRP\.(giveInventoryItem|generateItem|giveItem)\s*\(')),
+    ('item-', re.compile(r'[.:](removeInventoryItem|RemoveItem)\s*\(|Functions\.RemoveItem\s*\('
+                         r'|\bvRP\.(tryGetInventoryItem|removeInventoryItem|takeItem)\s*\(')),
     ('vehicle', re.compile(r'[.:](addVehicle|removeVehicle|saveVehicle)\s*\(|owned_vehicles|player_vehicles')),
-    ('job/perm', re.compile(r'[.:](setJob|setGroup|SetJob|SetPermission|setPermissionLevel)\s*\(|\badd_(ace|principal)\b|permission_level\s*=[^=]')),
+    ('job/perm', re.compile(r'[.:](setJob|setGroup|SetJob|SetGang|SetPermission|setPermissionLevel|setGroupGrade)\s*\(|\badd_(ace|principal)\b'
+                            r'|permission_level\s*=[^=]|\bvRP\.(addUserGroup|removeUserGroup|setPermission)\s*\(')),
     ('sql-write', re.compile(r'\bMySQL\.(insert|update|execute|prepare|transaction|rawExecute)\b|\bMySQL\.(Async|Sync)\.(execute|insert|store)\b|oxmysql[:.](insert|update|execute|prepare|transaction)\b')),
     ('coords/bucket', re.compile(r'\b(SetPlayerRoutingBucket|SetEntityRoutingBucket|SetEntityCoords)\s*\(|[.:](setRoutingBucket|setCoords)\s*\(')),
     ('spawn', re.compile(r'\b(CreateVehicle|CreateVehicleServerSetter|CreatePed|CreateObject|CreateObjectNoOffset)\s*\(|[.:](SpawnObject|SpawnVehicle|SpawnPed)\s*\(')),
@@ -207,7 +215,8 @@ TAGS = {
 GUARD = re.compile(r'\breturn\b|\bBan\s*\(|\bDropPlayer\s*\(|\bos\.time\s*\(|\bGetGameTimer\s*\(|cooldown|players_time', re.I)
 YIELD = re.compile(r'\.await\b|\bCitizen\.Await\b|\bAwait\s*\(|\bWait\s*\(|\bCitizen\.Wait\s*\(|\bMySQL\.Sync\.|\bPerformHttpRequestAwait\b|\blib\.callback\.await\b|\bawait\s')
 INTEGER_CHECK = re.compile(r'math\.floor|math\.tointeger|math\.type|ParseAmount|ParseInt|isInteger|Number\.isInteger|parseInt|%d|\binteger\b', re.I)
-BALANCE_READ = re.compile(r'getAccount\s*\(|getMoney\s*\(|GetMoney\s*\(|PlayerData\.money|\.money\b|TryRemoveMoney|canAfford|hasMoney', re.I)
+BALANCE_READ = re.compile(r'getAccount\s*\(|getMoney\s*\(|GetMoney\s*\(|PlayerData\.money|\.money\b|TryRemoveMoney|canAfford|hasMoney'
+                          r'|getBalance|tryPayment|tryFullPayment|paymentFull|paymentBank|getBank', re.I)
 RATE = re.compile(r'cooldown|rate.?limit|RateLimit|players_time|lastUse|last_use|GetGameTimer|os\.time|busy\[|locks?\[', re.I)
 POSITION = re.compile(r'\b(distance\w*|dist|coords|coord|pos|position)\b', re.I)
 TARGET = re.compile(r'\b(target\w*|targetId|playerId|closestPlayer|closest\w*|serverId|otherId|receiver|buyer|seller)\b', re.I)
@@ -311,8 +320,11 @@ def collect_sinks(fi, body_start, body_end, index, depth, seen, via, out_sinks):
             out_sinks.setdefault(cat, set()).add(f'{fi.rel}:{ln}' + (f' via {via}' if via else ''))
     if depth <= 0:
         return
+    signature_end = body.find(')') + 1 if body.lstrip().startswith(('function', 'async')) else 0
     for m in CALL.finditer(body):
         name = m.group(1)
+        if m.start() < signature_end:
+            continue
         if name in seen or name in ('function', 'if', 'for', 'while', 'return', 'local', 'print', 'tostring', 'tonumber', 'type', 'pairs', 'ipairs'):
             continue
         target = index.get(fi.resource, {}).get(name)
@@ -348,7 +360,7 @@ def analyse(ep: Endpoint, fi: FileInfo, start: int, end: int, index):
     base_line = fi.line_of(start)
     tainted = tainted_names(body, ep.params)
     mutating = [c for c in ep.sinks if c in MUTATING]
-    client_callable = ep.kind in ('net-event', 'callback', 'custom')
+    client_callable = ep.kind in ('net-event', 'callback', 'custom', 'tunnel')
 
     def first_line(rx, cats=None):
         for idx, line in enumerate(lines):
@@ -565,6 +577,29 @@ def discover(files, index):
                               fi.line_of(m.start()), fi.side, params, fi.lang)
                 analyse(ep, fi, start, end, index)
                 endpoints.append(ep)
+    tunnels = {}
+    for fi in files:
+        if fi.lang != 'lua':
+            continue
+        for m in TUNNEL_BIND.finditer(fi.masked):
+            tunnels.setdefault(fi.resource, {})[m.group(2)] = fi.text[m.start(1):m.end(1)]
+    for fi in files:
+        bound = tunnels.get(fi.resource)
+        if not bound or fi.lang != 'lua':
+            continue
+        for table, iface in bound.items():
+            rx = re.compile(r'\bfunction\s+' + re.escape(table) + r'[.:](\w+)\s*\(|\b' + re.escape(table) + r'\.(\w+)\s*=\s*(?=function\b)')
+            for m in rx.finditer(fi.masked):
+                fstart = fi.masked.find('function', m.start())
+                parsed = parse_params(fi.masked, fstart, 'lua') if fi.masked.startswith('function', fstart) else None
+                if fstart < 0 or not parsed:
+                    continue
+                params, start, end = parsed
+                params = [p for p in params if p != 'self']
+                ep = Endpoint('tunnel', f'{iface}.{m.group(1) or m.group(2)}', fi.resource, fi.rel, fi.line_of(m.start()),
+                              fi.side, params, fi.lang)
+                analyse(ep, fi, start, end, index)
+                endpoints.append(ep)
     endpoints.sort(key=lambda e: (e.resource.lower(), e.file.lower(), e.line, e.name))
     for i, ep in enumerate(endpoints, 1):
         ep.id = f'E{i:04d}'
@@ -613,9 +648,19 @@ def write_ledger(path: Path, endpoints, root, opaque, escrow, shard_resources):
     path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 
+def _safe_console():
+    """Never crash on consoles that cannot encode a character (Windows cp1252, redirected pipes)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main() -> int:
+    _safe_console()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('path')
+    ap.add_argument('path', nargs='?', default='.')
     ap.add_argument('--json', action='store_true', help='full machine-readable inventory')
     ap.add_argument('--all', action='store_true', help='also print endpoints without sinks or tags')
     ap.add_argument('--ledger', help='write a Markdown coverage ledger to this file')

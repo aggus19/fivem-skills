@@ -1,0 +1,7 @@
+fx_version 'cerulean'
+game 'gta5'
+name 'qb_shop'
+author 'fixture'
+description 'Fixture: QBCore callback and command patterns'
+version '1.0.0'
+server_script 'server.lua'

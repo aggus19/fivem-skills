@@ -82,7 +82,17 @@ def send_rcon(host: str, port: int, password: str, command: str, timeout: float 
     return parse_reply(data)
 
 
+def _safe_console():
+    """Never crash on consoles that cannot encode a character (Windows cp1252, redirected pipes)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv=None) -> int:
+    _safe_console()
     ap = argparse.ArgumentParser(description="Send one RCON command to FXServer (UDP).")
     ap.add_argument("command", nargs="+", help="console command, e.g. ensure myres")
     ap.add_argument("--host", default="127.0.0.1")

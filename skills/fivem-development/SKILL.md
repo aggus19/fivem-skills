@@ -1,6 +1,6 @@
 ---
 name: fivem-development
-description: Builds, reviews, debugs, optimizes and secures FiveM (Cfx.re / GTA V) resources and servers — CfxLua 5.4, JS/TS and C# scripts, fxmanifest.lua, all natives, events and callbacks, OneSync entities and state bags, NUI (React/Vite), oxmysql and database tuning, ox_lib, ox_inventory, ox_target, ox_core, Qbox, QBCore, ESX Legacy, ND, vRP, server.cfg, convars, txAdmin, artifacts, GTA V Enhanced, vehicles/handling, MLO/streaming, RP systems design, anticheat and resource audits (backdoors, exploits, dupes). Use when the user mentions FiveM, FXServer, Cfx, CitizenFX, GTA RP/roleplay servers, a framework or ox resource above, a .lua resource with fxmanifest, or asks to create, convert, optimize, scale or audit a FiveM script or server — including requests in Spanish or Portuguese.
+description: Builds, reviews, debugs, optimizes and secures FiveM (Cfx.re / GTA V) resources and whole servers — CfxLua 5.4, JS/TS and C#, fxmanifest.lua, natives, events and callbacks, OneSync and state bags, NUI, oxmysql and databases, ox_lib/ox_inventory/ox_target/ox_core, Qbox, QBCore, ESX, ND, vRP/Creative and custom frameworks, server.cfg, convars, txAdmin, console log analysis, GTA V Enhanced, vehicles, MLO/streaming, RP systems, anticheat and audits (backdoors, exploits, dupes, endpoint coverage). Use when the user mentions FiveM, FXServer, Cfx, CitizenFX, GTA RP/roleplay servers, a framework or ox resource above, a resource with fxmanifest.lua, server console errors, or asks to create, convert, optimize, scale, debug or audit a FiveM script or server, in any language.
 license: MIT
 compatibility: Scripts need Python 3.8+ (standard library only); native lookup needs internet on first run. NUI builds with Bun 1.4.2 or compatible Node/npm; see its package.json.
 metadata:
@@ -52,6 +52,7 @@ FXServer Legacy Recommended **35245** / Latest 37150 (clients can't join older b
 | UI / HUD / menus in HTML (NUI), loading screens, DUI | [nui.md](references/nui.md) |
 | Editor, LuaLS addon, lint, format, bundlers, CI | [tooling.md](references/tooling.md) |
 | Errors, crashes, console commands, logs | [debugging.md](references/debugging.md) |
+| Reading console / txAdmin logs (script errors, load failures, escrow entitlement, hitches, slow queries, oversized assets, removed convars) | [console-logs.md](references/console-logs.md) |
 
 **Libraries (overextended)**
 | Task | Read |
@@ -116,13 +117,23 @@ All in `scripts/`, Python 3.8+, standard library only; paths relative to this sk
 | `python scripts/build_natives_catalog.py [--out DIR] [--refresh]` | Regenerate `assets/natives/` (full catalogue) |
 | `python scripts/manifest.py <resource\|resources dir>` | Literal manifest vs resolved files/globs, `data_file` paths, NUI downloads and server-file exposure; a folder checks every resource below it; dynamic manifests explicitly unsupported |
 | `python scripts/audit.py <path> [--min high] [--json]` | Heuristic code/config/build-output scan; exit 1 on any high/critical regardless of display filter. Dependencies excluded; findings need review |
-| `python scripts/project.py <server\|resources dir> [--json] [--section S]` | Whole-server facts: cfg exec chain, convar conflicts, ensure vs folders, installed versions vs `assets/baseline.json` (with file:line), data_file and asset checks, git state; exit 1 on high |
+| `python scripts/project.py [path] [--cfg FILE] [--json] [--section S]` | Whole-server facts from the server root, `resources/` or any folder inside it (default: current dir): installed stack and the reference to read, launch cfg (txAdmin `cfgPath`) and exec chain, convar conflicts, ensure vs folders, versions vs `assets/baseline.json` (file:line), data_file and asset checks, git state; exit 1 on high |
+| `python scripts/logs.py [path\|log ...] [--last] [--json]` | Finds and summarises FXServer/txAdmin console logs: script errors with stack frame, load failures, resources that did not start (escrow entitlement, missing category), hitches, slow queries, oversized assets, config warnings, leaked secrets (masked) |
 | `python scripts/surface.py <path> [--ledger FILE] [--shard K/N] [--json]` | Every client-reachable server entry point, the sinks it reaches (money, items, SQL, buckets, spawns...) and fixed risk tags; writes the coverage ledger; stable IDs |
 | `python scripts/rcon.py [--host H] [--port P] <command...>` | One RCON command over UDP (password from env `FIVEM_RCON_PASSWORD`, never argv; localhost unless `--allow-remote`) |
 | `python scripts/server_info.py [host:port] [--resource NAME] [--getinfo] [--json]` | Summarise `/info.json`, `/players.json`, `/dynamic.json`; check a resource is started |
 | `python scripts/scaffold.py <name> [--out DIR] [--nui] [--profile minimal\|ox-shop]` | Default: dependency-free Lua; optional NUI. Explicit ox-shop profile: ox stack + bridge/economy integration example |
 
 ## Workflows
+
+### First contact with a server (any framework, any layout)
+Works from the user's `resources/` folder (or any folder inside it); every script defaults to the current directory.
+```
+- [ ] 1. python scripts/project.py      -> stack (framework/inventory/target/DB/voice...), launch cfg, versions, ensure/data_file/asset facts
+- [ ] 2. python scripts/logs.py         -> what actually fails at runtime (first error per resource wins)
+- [ ] 3. Read the references the stack row points to; adapt to what is installed (project-adaptation.md), never to a template
+- [ ] 4. Continue with the matching workflow below; for "analyse/audit my server" use Audit a server
+```
 
 ### Create a resource
 ```
@@ -170,3 +181,5 @@ For hitches or unclear latency, start with [hitch-diagnostics.md](references/hit
 - State the file and side (client/server/shared) for every snippet, plus required `fxmanifest.lua` / `server.cfg` / SQL changes.
 - Follow the project's language, UI and localization conventions. Use ox_lib when selected and compatible; do not introduce it solely to fit a template.
 - Answer in the user's language; code identifiers in English.
+- **Code written into the user's project carries no explanatory comments** (Lua, JS, cfg): client files are downloaded by every player and server files leak in dumps, so never describe validation, anticheat, economy or permission logic in comments. Explain the change in the reply, PR or commit message instead. Keep the project's existing comments untouched. `scaffold.py` strips template comments (`--keep-comments` only for learning).
+- Never print or copy secrets (license keys, DB strings, webhooks, tokens) into answers, reports, code or logs; cite `file:line` and say what to rotate.

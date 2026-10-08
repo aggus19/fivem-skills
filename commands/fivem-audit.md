@@ -9,7 +9,8 @@ Use the `fivem-development` skill. Target: $ARGUMENTS
 - More than one resource (a server root or a `resources/` folder): follow `references/server-audit.md` exactly.
 
 Run, from `${CLAUDE_PLUGIN_ROOT}/skills/fivem-development/scripts/`, in this order:
-- `python project.py <target>` (servers only: versions vs baseline, ensure vs folders, cfg, data_file, assets, git)
+- `python project.py <target>` (servers only: stack, launch cfg, versions vs baseline, ensure vs folders, cfg, data_file, assets, git)
+- `python logs.py <target>` (servers only, when console logs exist: runtime errors, failed starts, hitches, slow queries)
 - `python manifest.py <target>`
 - `python audit.py <target> --json`
 - `python surface.py <target> --ledger ledger.md`

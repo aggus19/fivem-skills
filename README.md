@@ -1,145 +1,130 @@
 # FiveM Skills — `fivem-development`
 
-Skill para agentes de IA (Claude Code, OpenAI Codex, Cursor y otras herramientas compatibles con Agent Skills) que trae conocimiento **actualizado al 7 de octubre de 2026** sobre desarrollo en FiveM, scripts de comprobación y plantillas de integración con límites de validación explícitos.
+**English** · [Español](README.es.md)
 
-> Las versiones se verificaron contra fuentes primarias (GitHub releases, npm, docs.fivem.net, forum.cfx.re, API de artifacts) el **2026-10-07**. Ver [`skills/fivem-development/references/versions.md`](skills/fivem-development/references/versions.md).
+`fivem-development` is an open [Agent Skill](https://agentskills.io/specification) that gives AI coding agents current, source-checked knowledge of FiveM (Cfx.re / GTA V) development, plus standard-library Python tools that inspect a real server the same way every time. It is meant to work on any FiveM server — ESX, QBCore, Qbox, ox_core, ND, vRP/Creative or standalone, any folder layout, Windows or Linux, with or without txAdmin — and with any agent that can read a `SKILL.md` or project instructions. Version facts are a baseline verified against primary sources on **2026-10-07** ([`references/versions.md`](skills/fivem-development/references/versions.md)).
 
-## Qué incluye
+## What it does
 
-| Área | Contenido |
+- **Create** resources adapted to the installed stack (Lua, JS/TS, C#; optional React/Vite NUI), with server-side validation by default.
+- **Modify and convert** existing resources while preserving the framework, data owners, UI and package manager already in use.
+- **Debug** script errors, load failures, escrow entitlement errors and hitches from the server console log.
+- **Optimize** client, server, NUI and database work with measured before/after comparisons instead of blanket rules.
+- **Audit** a single resource or a whole server: backdoors, SQL injection, client-trust exploits, item/money dupes, outdated dependencies, broken `ensure`/`data_file` entries and oversized assets, with an explicit coverage contract ([`references/server-audit.md`](skills/fivem-development/references/server-audit.md)).
+
+Generated Lua is shipped **without explanatory comments**: `scaffold.py` strips them from templates, because client scripts are downloaded by players and should not explain server logic. Pass `--keep-comments` when you want the annotated version for learning.
+
+## Quick start from your server
+
+The scripts need only Python 3.8+. Run them from your server's `resources/` folder (or the server root) with no arguments; they find the server root, the launch cfg and the logs themselves. Below, `<skill>` is the path where you placed `skills/fivem-development`.
+
+```bash
+cd /path/to/your/server/resources
+
+python <skill>/scripts/project.py      # inventory of the whole server
+python <skill>/scripts/logs.py         # problems from the console log, grouped and counted
+python <skill>/scripts/surface.py --ledger ledger.md   # every client-reachable server entry point
+python <skill>/scripts/audit.py        # heuristic security / performance / compatibility scan
+python <skill>/scripts/manifest.py     # validates every fxmanifest.lua below the current folder
+```
+
+- **`project.py`** — detected stack (framework, inventory, target, DB driver, voice, phone…), the cfg `exec` chain from the launch cfg (txAdmin `cfgPath` when a txAdmin profile points at this server, else `server.cfg`), removed or conflicting convars, `ensure` targets vs actual folders (categories expanded), duplicate and never-started resources, installed versions vs [`assets/baseline.json`](skills/fivem-development/assets/baseline.json) with `file:line`, `data_file` paths, streamed files over 16 MiB, and git state. It never prints convar values.
+- **`logs.py`** — finds `txData/<profile>/logs/fxserver.log` (or `logs/*.log` next to the server) by itself and streams it, so large logs are fine. Groups script errors (resource, `file:line`, first stack frame), load failures, resources that failed to start (including escrow entitlement), thread hitches, slow queries, oversized streamed assets, removed or unknown convars, startup security advisories and crashes. Values that look like keys, tokens or webhooks are masked.
+- **`surface.py`** — lists every client-reachable server entry point (net events, `lib.callback`, ESX and QBCore/Qbox callbacks and commands, custom register wrappers, exports, `SetHttpHandler`, JS `onNet`, vRP/Creative tunnels) with the sinks each one reaches (money, items, vehicles, jobs, SQL writes, coords/buckets, spawns, `ExecuteCommand`…) across ESX, QBCore/Qbox, ND, ox_core and vRP/Creative, plus fixed-meaning risk tags. `--ledger` writes a Markdown coverage ledger with stable IDs; `--shard K/N` splits it for parallel reviewers.
+- **`audit.py`** and **`manifest.py`** — both default to the current folder. `audit.py` reports candidates to confirm by reading the code; `manifest.py` checks scripts, `files`, `ui_page`, dependencies and `data_file` paths against the disk.
+
+Then ask your agent:
+
+> Audit my server following `references/server-audit.md`.
+
+The agent uses these outputs as the inventory, reviews every ledger row and reports coverage counts instead of sampling.
+
+Other scripts: `natives.py` (look up and verify natives, detect invented or wrong-side natives), `build_natives_catalog.py` (regenerate the native catalogue), `scaffold.py` (create a resource; `--profile ox-shop`, `--nui`), `rcon.py` (send one RCON command to a development server; password only from `FIVEM_RCON_PASSWORD`) and `server_info.py` (summarise a running server from its public HTTP endpoints).
+
+```bash
+python <skill>/scripts/natives.py update                 # download the official native DB once (cached)
+python <skill>/scripts/natives.py show GetEntityCoords
+python <skill>/scripts/natives.py check ./my_resource --strict
+python <skill>/scripts/scaffold.py my_resource --out "./[custom]"
+python <skill>/scripts/scaffold.py my_shop --profile ox-shop --nui --out "./[custom]"
+```
+
+## Use it with your agent
+
+The skill is the folder [`skills/fivem-development/`](skills/fivem-development/). Keep `SKILL.md`, `references/`, `scripts/` and `assets/` together; the scripts resolve their data relative to their own location. The skill is not an FXServer resource: do not `ensure` it.
+
+### Claude Code
+
+As a plugin (adds the `/fivem-new`, `/fivem-audit` and `/fivem-native` commands and the read-only `fivem-auditor` subagent):
+
+```bash
+/plugin marketplace add aggus19/fivem-skills
+/plugin install fivem-development@fivem-skills
+```
+
+From a local clone: `/plugin marketplace add ./path/to/fivem-skills`, then the same install command.
+
+Skill only: copy `skills/fivem-development/` to `~/.claude/skills/fivem-development/` (all projects) or `.claude/skills/fivem-development/` inside a project.
+
+### Agents that support the Agent Skills format
+
+Any agent that loads skills from a `SKILL.md` with `name`/`description` frontmatter can use the folder as is: copy `skills/fivem-development/` into that agent's skills directory (for example a project-level `.agents/skills/fivem-development/`). Skills directories differ between agents; check your agent's documentation for the right location.
+
+### Agents without skill support
+
+For Codex, Cursor, Gemini CLI or any other agent that reads project instructions but not skills, point it to [`AGENTS.md`](AGENTS.md) and [`skills/fivem-development/SKILL.md`](skills/fivem-development/SKILL.md) as project instructions (for example by referencing them from your existing instruction file, without replacing your own rules). `SKILL.md` routes the agent to the reference it needs, so it reads only what the task requires. Check your agent's documentation for how it loads instruction files.
+
+## Requirements
+
+- **Python 3.8+, standard library only.** No `pip install` is needed to run the scripts.
+- **Works offline**, except `natives.py update` / `build_natives_catalog.py`, which download the official native database from Cfx.re (cached in `~/.cache/fivem-skill` or `$FIVEM_SKILL_CACHE`). A full native catalogue (7,379 natives) also ships in `assets/natives/`.
+- **Bun** (1.4.2 or compatible Node/npm) only to build the optional NUI template.
+
+## What is included
+
+| Area | Contents |
 |---|---|
-| **SKILL.md** | Reglas no negociables (autoridad del servidor, no inventar natives, detectar el stack, APIs actuales, presupuesto de rendimiento, licencias), tabla de ruteo a referencias y flujos de trabajo (crear, modificar, auditar, convertir, optimizar). |
-| **53 referencias** | **Plataforma:** versiones y línea de tiempo de cambios · server.cfg/instalación/ACE · todas las convars y comandos con valores recomendados · txAdmin completo · OneSync/entidades/state bags/routing buckets · GTA V Enhanced. **Scripting:** fxmanifest (todas las directivas) · runtimes CfxLua 5.4.8/JS/TS/C# · todos los eventos nativos · guía de natives + 699 natives esenciales verificadas · NUI/DUI · tooling · debugging. **ox:** ox_lib completo en 6 archivos (UI, core, world, utilidades, JS) · oxmysql · optimización de bases de datos (MariaDB/MySQL, índices, my.cnf, backups) · ox_inventory · ox_target · ox_core · ox_doorlock/ox_fuel. **Frameworks:** Qbox + ecosistema qbx · ESX Legacy 1.15.2 + ecosistema · QBCore (refactor 2026) · ND/vRP · bridge multi-framework · recursos de la comunidad por categoría. **Gameplay:** patrones · diseño de sistemas RP · vehículos y handling · mapeo/streaming/ropa. **Calidad:** qué usar vs qué evitar · seguridad · anticheat · checklist de auditoría · auditoría de servidor completo (inventario, cobertura, clases de exploit) · rendimiento + cookbook + escalado de servidores grandes · licencias (PLA 2026‑09‑10). |
-| **Catálogo de natives** | `assets/natives/`: las **7.379** natives (6.436 GTA + 943 CFX) en 47 archivos por namespace, con firma Lua, lado, hash, build mínimo, nombres viejos y link a docs. Regenerable con `build_natives_catalog.py`. |
-| **9 comandos + helper compartido** (Python 3.8+, sin dependencias; helper `resource_files.py`): `rcon.py` y `server_info.py` para probar recursos contra un servidor; ver más abajo. Los otros 7: | `natives.py` (busca/verifica natives, incluye nombres viejos, detecta natives inventadas y del lado equivocado) · `build_natives_catalog.py` (regenera el catálogo) · `manifest.py` (valida fxmanifest) · `audit.py` (backdoors conocidos, SQLi, confianza en el cliente, XSS en NUI, webhooks expuestos, `.cfg` inseguros, loops sin Wait, APIs obsoletas) · `scaffold.py` (genera recursos) · `project.py` (inventario del servidor: cadena de `exec` de los cfg, `ensure` vs carpetas, versiones instaladas vs `assets/baseline.json`, estado de git, chequeos de assets y `data_file`) · `surface.py` (puntos de entrada del servidor alcanzables desde el cliente, con sinks y etiquetas de riesgo; escribe un registro de cobertura). |
-| **Plantillas** | Lua mínimo sin dependencias por defecto; perfil opcional `ox-shop` con *bridge* que autodetecta Qbox / ESX / QBCore / standalone + ejemplo de tienda con compensaciones comprobadas (compras desactivadas hasta integrar recuperación persistente) · NUI React 19 + Vite 8 + TypeScript 7 con target `chrome103` (CEF de FiveM Legacy). |
-| **Configs** | `.luarc.json` (LuaLS + addon FiveM), `selene.toml` + std `cfx.yml`, `.stylua.toml`, `server.cfg.example`, workflow de GitHub Actions. |
-| **Plugin de Claude Code** | Comandos `/fivem-new`, `/fivem-audit`, `/fivem-native` y el subagente `fivem-auditor`. |
-| **Tests** | `python -m unittest discover -s tests -v` (offline); pruebas opcionales de lógica Lua 5.4 y compilación NUI real. Ver Validación. |
+| `SKILL.md` | Non-negotiable rules (server authority, never invent natives or APIs, adapt to the installed stack, measured performance, evidence levels, platform license), reference routing table and workflows (create, modify, audit a resource, audit a server, convert, optimize). |
+| `references/` | Platform (versions, server.cfg, convars, txAdmin, OneSync, GTA V Enhanced, console logs), scripting (fxmanifest, runtimes, events, natives, NUI, tooling, debugging), overextended libraries (ox_lib, oxmysql, ox_inventory, ox_target, ox_core), frameworks (Qbox, ESX Legacy, QBCore, ND/vRP, multi-framework bridge), gameplay and RP systems, security, anticheat, audit checklists, performance and scaling, licensing. |
+| `assets/` | Native catalogue by namespace, `baseline.json`, templates (dependency-free Lua, optional `ox-shop` profile with a framework bridge, React 19 + Vite + TypeScript NUI targeting CEF 103), configs (LuaLS, selene, StyLua, `server.cfg.example`, GitHub Actions workflow). |
+| `scripts/` | The tools described above, plus the shared `resource_files.py` helper. Manifests are parsed statically and never executed. |
+| Claude Code plugin | `commands/`, `agents/`, `.claude-plugin/`. |
+| `evals/`, `tests/` | Evaluation scenarios (specifications, not executed agent runs) and offline tests with fixtures. |
 
-## Alcance general y plan
+## What is verified
 
-La skill se adapta a cada solicitud y al stack instalado: standalone, frameworks y
-forks, Lua/JS/C#, interfaces existentes y datos con distintos propietarios. El perfil
-mínimo no instala ox_lib, oxmysql ni una tienda. Los ejemplos de economía son opcionales
-y requieren verificar contratos, persistencia y recuperación antes de habilitarlos.
-
-- [Adaptación al proyecto](skills/fivem-development/references/project-adaptation.md).
-- [Seguridad de triggers, callbacks, exports y operaciones](skills/fivem-development/references/security-validation.md), con pruebas negativas y de concurrencia/recuperación.
-- [Diagnóstico de hitches](skills/fivem-development/references/hitch-diagnostics.md), separando scripts, sincronización, red, DB y host.
-- [Plan de etapas y evidencia pendiente](docs/roadmap.md).
-
-Las recomendaciones de DB y soporte se revisaron el **2026-10-08**. Una versión nueva
-no garantiza mayor rendimiento ni ausencia de hitches; se exige compatibilidad y
-medición. Las pruebas locales no equivalen a integración FXServer ni a un benchmark.
-
-## Datos clave del baseline (2026-10-07)
-
-- FXServer Legacy **Recommended 35245** / Latest 37150; después del **15-10-2026** los clientes no pueden entrar a servidores con builds viejas.
-- Game build **3889** (`mp2026_01`, The Kortz Center Heist).
-- **Lua 5.3 eliminado** (jun-2025): `lua54 'yes'` ya es opcional. **Node 16 eliminado**: Node 22 (Legacy).
-- **OneSync forzado**; flags `sv_experimental*` eliminados.
-- **GTA V Enhanced** en early access desde el 21-07-2026 con su propio servidor (*Cfx Server*, build 161); sin Asset Escrow todavía.
-- **CommunityOx archivado** (abr-2026): ox_lib / oxmysql / ox_inventory / ox_target volvieron a `overextended/*` (ox_lib 3.40.0, oxmysql 2.14.3, ox_inventory 2.48.0, ox_target 1.18.1).
-- Qbox **1.24.0** · ESX Legacy **1.15.2** (nuevo `esx_lib`) · QBCore se mudó a `github.com/qbcore-fivem/qb-core`.
-- txAdmin **8.1.1** · CEF **M103** con JIT de V8 desactivado · PLA vigente del **10-09-2026** (Tebex es el único medio de cobro permitido).
-- ox_inventory **≥ 2.47.6** (fixes de duplicación) y **sin soporte QBCore** desde 2.42 · QBCore tuvo un **refactor en mayo 2026** (`OnPlayerUpdated`, sin `QBConfig`/`QBShared`).
-- C# `mono_rt2` expiró (30-06-2026) · `node_version` se ignora (todo Node 22) · Tailwind v4 no anda en CEF 103.
-- Bases de datos: MariaDB 11.8/12.3 LTS o MySQL 8.4/9.7 LTS (MariaDB 10.6 y MySQL 8.0 ya son EOL).
-
-## Instalación
-
-### Claude Code: como plugin (recomendado)
 ```bash
-# desde un repo de GitHub que contenga esta carpeta
-/plugin marketplace add <usuario>/<repo>
-/plugin install fivem-development@fivem-skills
-
-# o localmente
-/plugin marketplace add "C:/Users/Administrator/Documents/FiveM Skills"
-/plugin install fivem-development@fivem-skills
-```
-
-### Claude Code: solo la skill
-Copiá `skills/fivem-development/` a `~/.claude/skills/fivem-development/` (global) o a `.claude/skills/fivem-development/` dentro de tu proyecto.
-
-### OpenAI Codex
-Copiá la carpeta completa a `~/.agents/skills/fivem-development/` o a `.agents/skills/fivem-development/` dentro del proyecto. Conservá `scripts/`, `references/` y `assets/`. Integrá la indicación de cargar esa `SKILL.md` en el `AGENTS.md` existente, sin reemplazar las instrucciones del servidor. Los helpers se resuelven desde la ubicación instalada de la skill. La skill no es un recurso de FXServer y no lleva `ensure` en `server.cfg`.
-
-### Cursor
-Cursor lee `.cursor/skills/`, `.agents/skills/` y también `.claude/skills/`: copiá la carpeta de la skill a cualquiera de esas rutas.
-
-### Cualquier agente compatible (`npx skills`)
-```bash
-npx skills add <usuario>/<repo> --skill fivem-development
-```
-
-## Uso de los scripts
-```bash
-cd skills/fivem-development
-python scripts/natives.py update                       # descarga la base oficial de natives (~3 MB, cache en ~/.cache/fivem-skill)
-python scripts/natives.py show GetEntityCoords          # firma exacta cliente y servidor
-python scripts/natives.py check ../../mi_recurso --strict
-python scripts/manifest.py ../../mi_recurso
-python scripts/audit.py ../../resources --min medium
-python scripts/project.py ../..                          # inventario del server: versiones, ensure, cfg, data_file, assets, git
-python scripts/surface.py ../../resources --ledger ledger.md   # todos los endpoints con sinks + registro de cobertura
-python scripts/scaffold.py mi_recurso --out "../../resources/[custom]"
-python scripts/scaffold.py mi_tienda --profile ox-shop --out "../../resources/[custom]" --nui
-```
-
-## Estructura
-```
-FiveM Skills/
-├── .claude-plugin/        plugin.json + marketplace.json
-├── skills/fivem-development/
-│   ├── SKILL.md
-│   ├── references/        53 documentos
-│   ├── scripts/           natives.py · build_natives_catalog.py · manifest.py · audit.py · scaffold.py · rcon.py · server_info.py · project.py · surface.py · resource_files.py (helper)
-│   └── assets/
-│       ├── natives/       catálogo completo (47 archivos por namespace)
-│       ├── templates/     resource-minimal/ · resource-lua/ · nui-react-vite/
-│       └── configs/       .luarc.json · selene.toml · cfx.yml · .stylua.toml · server.cfg.example · github-workflow.yml
-├── commands/              /fivem-new · /fivem-audit · /fivem-native
-├── agents/                fivem-auditor
-├── docs/community-analysis/  evidencia: análisis y verificación de ~40 repos públicos de skills/MCP de FiveM
-├── evals/                 casos de evaluación de la skill
-├── tests/                 tests offline de los scripts
-├── AGENTS.md · CHANGELOG.md · LICENSE
-```
-
-## Validación
-
-Los scripts de la skill siguen usando solamente la biblioteca estándar de Python 3.8+. Las dependencias siguientes son exclusivas de las pruebas del repositorio:
-
-```powershell
 python -m unittest discover -s tests -v
-# Opcional: ejecutar también los casos Lua y la compilación NUI (en un entorno de pruebas)
-python -m pip install lupa==2.8
-$env:FIVEM_REQUIRE_LUA_TESTS = '1'
-$env:FIVEM_TEST_NUI_BUILD = '1'
-python -m unittest discover -s tests -v
-bun test ./tests/nui
 ```
 
-En bash: `FIVEM_REQUIRE_LUA_TESTS=1 FIVEM_TEST_NUI_BUILD=1 python -m unittest discover -s tests -v`.
+On Windows with Python 3.12 the suite currently runs **119 tests: 87 pass and 32 are skipped**. The skipped ones are optional Lua 5.4 logic tests (need `lupa`) and real NUI builds (need Bun); enable them with `FIVEM_REQUIRE_LUA_TESTS=1` and `FIVEM_TEST_NUI_BUILD=1`. Skipped tests are not counted as passed. The GitHub Actions workflow runs Python 3.8 and 3.12 and the Lua/NUI jobs separately.
 
-La suite básica no descarga dependencias. La compilación opcional usa Bun 1.4.2 y el `bun.lock` de la plantilla con `--frozen-lockfile`; requiere registro o caché. Lua usa `lupa.lua54`, con adaptadores que simulan fallos y cesiones de ejecución. Sin esos requisitos los casos opcionales figuran como omitidos; no deben contarse como aprobados.
+These tests cover the scripts, templates and mocked logic. They are not FXServer integration tests, database integration tests or performance benchmarks, and no runtime speedup is claimed. See [`design-and-validation.md`](skills/fivem-development/references/design-and-validation.md) for evidence levels.
 
-`.github/workflows/skill-tests.yml` configura la matriz Python 3.8/3.12 y exige las pruebas Lua/NUI en un trabajo separado. La compilación y las pruebas de lógica no sustituyen CfxLua, oxmysql/InnoDB, CEF ni dos clientes reales de FiveM. Criterios y experimentos: [design-and-validation.md](skills/fivem-development/references/design-and-validation.md).
+## Privacy and safety
 
-`audit.py --min` filtra la presentación: un hallazgo high/critical oculto sigue devolviendo error. El escáner incluye código compilado, pero excluye node_modules; no certifica dependencias. Los manifiestos calculados se reportan como no analizables; nunca se ejecutan para validarlos.
+- Scripts are **read-only by default**. Only `scaffold.py` (creates a resource where you ask), `surface.py --ledger` (writes the ledger file you name) and the native tools (`natives.py update` writes its cache; `build_natives_catalog.py` regenerates `assets/natives/`) write files.
+- Scripts **never print secrets**: `project.py` does not print convar values, `logs.py` masks values that look like keys, tokens or webhooks, and `rcon.py` reads its password only from an environment variable.
+- **No telemetry.** The only network access is the native database download and, if you run them, `rcon.py` / `server_info.py` against a server you choose (`rcon.py` refuses non-local hosts unless `--allow-remote`).
 
-## Mantenimiento
-Las versiones envejecen. Para actualizar el baseline: seguí la sección "How to re-verify" de `references/versions.md`, actualizá las tablas y `assets/baseline.json` (debe coincidir con `versions.md`), `metadata.baseline-date` en `SKILL.md`, corré los tests y anotá los cambios en `CHANGELOG.md`.
+## Responsible use
 
-## Fuentes principales
-- Cfx.re docs: https://docs.fivem.net/docs/ · natives: https://docs.fivem.net/natives/ · descargas: https://docs.fivem.net/docs/server-download/
-- Foro Cfx.re (anuncios 2026): https://forum.cfx.re/t/5422124 (build 35245) · https://forum.cfx.re/t/5412858 (Enhanced early access) · https://forum.cfx.re/t/5415045 (Dev Update #3)
-- overextended: https://overextended.dev/docs · https://github.com/overextended
-- Qbox: https://docs.qbox.re · ESX: https://docs.esx-framework.org/en · QBCore: https://qbcore.org/docs
+The audit features are for **defensive security**: reviewing servers and resources you own or are authorised to review. The skill follows the Cfx.re Creator Platform License Agreement: no escrow bypass, no leaked resources, no real-money gambling or loot boxes, no currency sales and no payments outside Tebex. See [`references/licensing-and-policy.md`](skills/fivem-development/references/licensing-and-policy.md) and the official terms at https://fivem.net/terms.
+
+## Contributing
+
+- Version facts age. Re-verify following "How to re-verify" in [`references/versions.md`](skills/fivem-development/references/versions.md), update the baseline date (`metadata.baseline-date` in `SKILL.md`), and keep `assets/baseline.json` and `versions.md` in sync.
+- Every new detection in `audit.py`, `surface.py`, `project.py` or `logs.py` needs a fixture under `tests/fixtures/` and a test.
+- Scripts stay standard-library Python 3.8+; `SKILL.md` stays under 500 lines with references one level deep (see [`AGENTS.md`](AGENTS.md)).
+- Run `python -m unittest discover -s tests -v` and record changes in [`CHANGELOG.md`](CHANGELOG.md).
+
+## Main sources
+
+- Cfx.re docs: https://docs.fivem.net/docs/ · natives: https://docs.fivem.net/natives/ · server download: https://docs.fivem.net/docs/server-download/
+- overextended: https://overextended.dev/docs · Qbox: https://docs.qbox.re · ESX: https://docs.esx-framework.org/en · QBCore: https://qbcore.org/docs
 - txAdmin: https://github.com/citizenfx/txAdmin/releases · PLA: https://fivem.net/terms
 - Agent Skills: https://agentskills.io/specification · Claude Code plugins: https://code.claude.com/docs/en/plugins-reference
 
-## Licencia
-MIT. FiveM, Cfx.re y GTA V son marcas de sus respectivos dueños; este proyecto no está afiliado a Rockstar Games ni a Cfx.re.
+## License
+
+[MIT](LICENSE). FiveM, Cfx.re and GTA V are trademarks of their respective owners. This project is not affiliated with Rockstar Games, Take-Two or Cfx.re.

@@ -2,7 +2,8 @@
 """Whole-server inventory: the facts every audit must start from, computed the same way every time.
 
 Sections (all on by default):
-  cfg       *.cfg exec chain from server.cfg; removed/duplicated convars
+  stack     installed framework, inventory, target, DB driver, voice, phone... and the reference to read
+  cfg       *.cfg exec chain from the launch cfg (txAdmin cfgPath, else server.cfg); removed/duplicated convars
   ensure    ensure/start targets vs resource folders (categories expanded), never-started resources,
             duplicate resource names, dependencies started after their dependants
   versions  installed manifest versions vs assets/baseline.json (min-safe and baseline), with file:line
@@ -12,7 +13,8 @@ Sections (all on by default):
             *.ps1/*.sh) that reference files which do not exist
 
 Usage:
-  python project.py <server root or resources dir> [--json] [--section NAME ...]
+  python project.py [path] [--cfg FILE] [--json] [--section NAME ...]
+  path = server root, resources dir or any folder inside resources (default: current directory)
 Exit code: 0 = no high finding, 1 = at least one high finding, 2 = usage error.
 Standard library only (Python 3.8+). Never prints convar values (they may be secrets).
 """
@@ -34,7 +36,7 @@ SKIP = {'.git', 'node_modules', '__pycache__', 'cache', '.vs', '.idea'}
 STREAM_EXT = {'.ytd', '.yft', '.ydr', '.ydd', '.ybn', '.ymap', '.ytyp', '.ycd', '.ynv', '.ypt', '.ymt', '.awc', '.rpf'}
 LIMIT_MB = 16
 REMOVED_CONVARS = re.compile(r'^sv_experimental', re.I)
-SECTIONS = ('cfg', 'ensure', 'versions', 'datafiles', 'assets', 'repo')
+SECTIONS = ('stack', 'cfg', 'ensure', 'versions', 'datafiles', 'assets', 'repo')
 SEV_ORDER = {'info': 0, 'low': 1, 'medium': 2, 'high': 3}
 
 
@@ -54,14 +56,60 @@ def human(n):
     return f'{n:.1f} GiB'
 
 
+def has_manifests(path: Path, depth: int = 3) -> bool:
+    for base, dirs, names in os.walk(str(path)):
+        if 'fxmanifest.lua' in names or '__resource.lua' in names:
+            return True
+        if Path(base).relative_to(path).parts.__len__() >= depth:
+            dirs[:] = []
+        dirs[:] = [d for d in dirs if d not in SKIP]
+    return False
+
+
 def find_layout(path: Path):
-    """Return (server_root, resources_dir). Accepts the server root or the resources dir itself."""
+    """Return (server_root, resources_dir) from the server root, the resources dir, or any folder inside it.
+
+    The server root is the FXServer data folder (the working directory of `exec`); it usually
+    contains `resources/` and the cfg files, but some projects keep the cfg inside resources/.
+    """
     path = path.resolve()
-    if (path / 'resources').is_dir():
-        return path, path / 'resources'
-    if path.name.lower() == 'resources' or any((path / d).is_dir() and d.startswith('[') for d in os.listdir(path)):
-        return path, path
+    chain = [path] + list(path.parents)[:4]
+    for candidate in chain:
+        if (candidate / 'resources').is_dir() and has_manifests(candidate / 'resources'):
+            return candidate, candidate / 'resources'
+    for candidate in chain:
+        if candidate.name.lower() == 'resources':
+            return candidate.parent, candidate
     return path, path
+
+
+def find_txadmin(root: Path):
+    """txAdmin profiles whose dataPath is this server root -> [(profile dir, launch cfg path)]."""
+    found = []
+    seen = set()
+    for base in [root] + list(root.parents)[:3]:
+        for tx in (base / 'txData', base / 'txdata'):
+            if not tx.is_dir() or tx.resolve() in seen:
+                continue
+            seen.add(tx.resolve())
+            for cfg_json in sorted(tx.glob('*/config.json')):
+                try:
+                    data = json.loads(cfg_json.read_text(encoding='utf-8-sig'))
+                except (OSError, ValueError):
+                    continue
+                server = data.get('server') if isinstance(data.get('server'), dict) else data.get('fxRunner', {})
+                data_path = server.get('dataPath') or server.get('serverDataPath')
+                cfg_path = server.get('cfgPath')
+                if not data_path or not cfg_path:
+                    continue
+                try:
+                    same = Path(data_path).resolve() == root.resolve()
+                except OSError:
+                    same = False
+                if same:
+                    cfg = Path(cfg_path) if Path(cfg_path).is_absolute() else Path(data_path) / cfg_path
+                    found.append((cfg_json.parent, cfg.resolve()))
+    return found
 
 
 def discover_resources(resources: Path):
@@ -109,12 +157,18 @@ def cfg_commands(path: Path):
                 yield ln, m.group(2), m.group(3).strip()
 
 
-def cfg_chain(root: Path, resources: Path, report: Report):
-    """Ordered list of (cfg path, line, cmd, args) following exec from server.cfg; plus unreferenced cfgs."""
+def cfg_chain(root: Path, resources: Path, report: Report, launch: Path = None):
+    """Ordered list of (cfg path, line, cmd, args) following exec from the launch cfg; plus unreferenced cfgs.
+
+    The launch cfg is the txAdmin cfgPath when a txAdmin profile points at this server, else server.cfg.
+    `exec` paths are relative to the server data folder (the FXServer working directory).
+    """
     candidates = []
     for d in {root, resources}:
         candidates += sorted(p for p in d.glob('*.cfg') if p.is_file())
-    start = next((p for p in candidates if p.name.lower() == 'server.cfg'), None)
+    start = launch if launch and launch.is_file() else next((p for p in candidates if p.name.lower() == 'server.cfg'), None)
+    if launch and not launch.is_file():
+        report.add('cfg', 'high', 'launch-cfg-missing', f'txAdmin launches {launch}, which does not exist.')
     ordered, visited = [], set()
 
     def visit(cfg: Path):
@@ -125,7 +179,7 @@ def cfg_chain(root: Path, resources: Path, report: Report):
             ordered.append((cfg, ln, cmd, args))
             if cmd.lower() == 'exec' and args:
                 target = args.strip().strip('"').strip("'")
-                for base in (cfg.parent, root, resources):
+                for base in (root, cfg.parent, resources):
                     if (base / target).is_file():
                         visit((base / target).resolve())
                         break
@@ -134,13 +188,15 @@ def cfg_chain(root: Path, resources: Path, report: Report):
 
     if start:
         visit(start.resolve())
+        report.add('cfg', 'info', 'launch-cfg', f'Launch cfg: {start.name}' + (' (txAdmin cfgPath)' if launch else ' (default; '
+                   'pass the real one if FXServer is started with another +exec)'), str(start))
     else:
         report.add('cfg', 'medium', 'no-server-cfg', 'No server.cfg found next to the server root or resources dir.')
     unreferenced = [p for p in candidates if p.resolve() not in visited]
     for p in unreferenced:
         report.add('cfg', 'info', 'cfg-not-execd',
-                   f'{p.name} is not exec\'d from server.cfg (may be passed with +exec on the command line; '
-                   'it is analysed separately below)', p.name)
+                   f'{p.name} is not exec\'d from {start.name if start else "the launch cfg"} (another environment, or +exec on the '
+                   'command line; it is analysed separately below)', p.name)
     return ordered, unreferenced
 
 
@@ -417,11 +473,84 @@ def check_repo(root: Path, resources: Path, report: Report):
                                f'{script.name}:{ln}')
 
 
+# ---------------------------------------------------------------- stack
+
+STACK = [
+    ('framework', 'ESX Legacy', ['es_extended'], 'framework-esx.md'),
+    ('framework', 'Qbox', ['qbx_core'], 'framework-qbox.md'),
+    ('framework', 'QBCore', ['qb-core'], 'framework-qbcore.md'),
+    ('framework', 'ox_core', ['ox_core'], 'ox-core.md'),
+    ('framework', 'ND Core', ['ND_Core', 'nd_core'], 'framework-others.md'),
+    ('framework', 'vRP / Creative', ['vrp', 'vRP', 'vrpex', 'vrp_core'], 'framework-others.md'),
+    ('library', 'ox_lib', ['ox_lib'], 'ox-lib.md'),
+    ('database', 'oxmysql', ['oxmysql'], 'database-oxmysql.md'),
+    ('database', 'mysql-async (deprecated)', ['mysql-async'], 'database-oxmysql.md'),
+    ('database', 'ghmattimysql (deprecated)', ['ghmattimysql'], 'database-oxmysql.md'),
+    ('inventory', 'ox_inventory', ['ox_inventory'], 'ox-inventory.md'),
+    ('inventory', 'qb-inventory', ['qb-inventory'], 'framework-qbcore.md'),
+    ('inventory', 'qs-inventory', ['qs-inventory'], 'ecosystem-resources.md'),
+    ('inventory', 'core_inventory', ['core_inventory'], 'ecosystem-resources.md'),
+    ('inventory', 'codem-inventory', ['codem-inventory'], 'ecosystem-resources.md'),
+    ('target', 'ox_target', ['ox_target'], 'ox-target.md'),
+    ('target', 'qb-target', ['qb-target'], 'ox-target.md'),
+    ('target', 'qtarget', ['qtarget'], 'ox-target.md'),
+    ('voice', 'pma-voice', ['pma-voice'], 'ecosystem-resources.md'),
+    ('voice', 'SaltyChat', ['saltychat'], 'ecosystem-resources.md'),
+    ('voice', 'TokoVOIP', ['tokovoip_script'], 'ecosystem-resources.md'),
+    ('phone', 'lb-phone', ['lb-phone'], 'ecosystem-resources.md'),
+    ('phone', 'npwd', ['npwd'], 'ecosystem-resources.md'),
+    ('phone', 'qb-phone / qs-smartphone', ['qb-phone', 'qs-smartphone', 'qs-smartphone-pro'], 'ecosystem-resources.md'),
+    ('appearance', 'illenium-appearance / fivem-appearance', ['illenium-appearance', 'fivem-appearance'], 'ecosystem-resources.md'),
+    ('screenshot', 'screenshot-basic / screencapture', ['screenshot-basic', 'screencapture'], 'ecosystem-resources.md'),
+]
+
+
+def detect_stack(resources_map, report: Report, root: Path):
+    """Installed building blocks, so the reviewer reads the right framework references (never assume ESX/QBCore)."""
+    lower = {n.lower(): n for n in resources_map}
+    rows = []
+    for kind, label, names, ref in STACK:
+        hit = next((lower[n.lower()] for n in names if n.lower() in lower), None)
+        if not hit:
+            continue
+        path = resources_map[hit][0][0]
+        version, line = manifest_version(path / 'fxmanifest.lua')
+        rows.append({'kind': kind, 'name': label, 'resource': hit, 'version': version or '?', 'reference': ref,
+                     'where': os.path.relpath(path, root)})
+    kinds = {}
+    for r in rows:
+        kinds.setdefault(r['kind'], []).append(r['name'])
+    if not kinds.get('framework'):
+        report.add('stack', 'info', 'framework-unknown', 'No known framework resource found: standalone or a custom/renamed framework. '
+                   'Identify the owner of money, inventory and identity before reviewing economy handlers.')
+    if len(kinds.get('framework', [])) > 1:
+        report.add('stack', 'medium', 'framework-multiple', 'More than one framework is installed (' + ', '.join(kinds['framework'])
+                   + '): check which one is started and which bridge each resource uses.')
+    if len(kinds.get('inventory', [])) > 1:
+        report.add('stack', 'medium', 'inventory-multiple', 'More than one inventory is installed (' + ', '.join(kinds['inventory'])
+                   + '): items can be granted through the wrong owner.')
+    for r in rows:
+        if 'deprecated' in r['name']:
+            report.add('stack', 'medium', 'db-deprecated', f'{r["name"]} is installed: migrate to oxmysql (database-oxmysql.md).', r['where'])
+    return rows
+
+
 # ---------------------------------------------------------------- main
 
+def _safe_console():
+    """Never crash on consoles that cannot encode a character (Windows cp1252, redirected pipes)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main() -> int:
+    _safe_console()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('path')
+    ap.add_argument('path', nargs='?', default='.', help='server root, resources dir or any folder inside it (default: current dir)')
+    ap.add_argument('--cfg', help='launch cfg to follow (default: txAdmin cfgPath, else server.cfg)')
     ap.add_argument('--json', action='store_true')
     ap.add_argument('--section', action='append', choices=SECTIONS, help='run only these sections (repeatable)')
     ap.add_argument('--versions', action='store_true', help='shortcut for --section versions')
@@ -440,18 +569,27 @@ def main() -> int:
         return 2
     report = Report()
     out = {'root': str(root), 'resources_dir': str(resources), 'resources': len(resources_map)}
+    launch = Path(a.cfg).resolve() if a.cfg else None
+    if not launch:
+        tx = find_txadmin(root)
+        if tx:
+            launch = tx[0][1]
+            out['txadmin_profile'] = str(tx[0][0])
+    out['launch_cfg'] = str(launch) if launch else None
+    if 'stack' in sections:
+        out['stack'] = detect_stack(resources_map, report, root)
     for name, entries in sorted(resources_map.items()):
         if len(entries) > 1:
             report.add('ensure', 'high', 'resource-name-duplicate',
                        f'resource name {name} exists {len(entries)} times; only one can start: '
                        + ', '.join(os.path.relpath(p, root) for p, _ in entries))
-    commands, unreferenced = cfg_chain(root, resources, report) if sections & {'cfg', 'ensure'} else ([], [])
+    commands, unreferenced = cfg_chain(root, resources, report, launch) if sections & {'cfg', 'ensure'} else ([], [])
     if 'cfg' in sections:
-        check_convars(commands, report, 'server.cfg chain')
+        check_convars(commands, report, 'launch cfg chain')
         for cfg in unreferenced:
             check_convars([(cfg, ln, c, a2) for ln, c, a2 in cfg_commands(cfg)], report, cfg.name)
     if 'ensure' in sections:
-        started, order = check_ensure(commands, resources_map, report, 'server.cfg chain')
+        started, order = check_ensure(commands, resources_map, report, 'launch cfg chain')
         for cfg in unreferenced:
             s2, o2 = check_ensure([(cfg, ln, c, a2) for ln, c, a2 in cfg_commands(cfg)], resources_map, report, cfg.name)
             for k, v in s2.items():
@@ -478,6 +616,12 @@ def main() -> int:
     else:
         print(f'Server root: {root}\nResources dir: {resources}\nResources found: {len(resources_map)}'
               + (f'; started by cfg: {out["started"]}' if 'started' in out else ''))
+        if out.get('txadmin_profile'):
+            print(f'txAdmin profile: {out["txadmin_profile"]} (launch cfg {out["launch_cfg"]})')
+        if out.get('stack'):
+            print('\nStack (read these references):')
+            for r in out['stack']:
+                print(f'  {r["kind"]:10} {r["name"]:38} {r["version"]:10} -> references/{r["reference"]}  ({r["where"]})')
         if out.get('versions'):
             print('\nInstalled versions vs baseline (assets/baseline.json):')
             print(f'  {"resource":16} {"installed":10} {"min-safe":9} {"baseline":9} {"status":12} where')

@@ -213,6 +213,30 @@
         "Does not report eco_ok:buy as vulnerable",
         "Marks performance as unmeasured and prints no secret values"
       ]
+    },
+    {
+      "id": 20,
+      "prompt": "Estoy parado en la carpeta resources de mi server (no sé bien qué framework usa). Revisalo y decime qué está fallando.",
+      "expected_output": "Runs project.py and logs.py with no arguments from resources/, reports the detected stack and launch cfg, reads the references the stack points to and lists runtime failures from the console log.",
+      "assertions": [
+        "Runs project.py and logs.py from the current directory without asking for paths first",
+        "Names the detected framework/inventory/DB from project.py output (e.g. QBCore and vRP in tests/fixtures/multi_framework) and flags multiple frameworks",
+        "Uses the txAdmin cfgPath as the launch cfg when a txAdmin profile points at the server",
+        "Reports from logs.py: the script error with its first stack frame, the escrow entitlement failure (noting it can be expected on a dev key), the missing category, hitches and slow queries",
+        "Says a secret was printed to the console and must be rotated, without repeating it",
+        "Does not assume ESX or QBCore APIs that are not installed"
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "Arreglá el exploit de este callback de venta y aplicalo en mi recurso.",
+      "expected_output": "Fixes the handler with server-side validation and writes no explanatory comments into the Lua; the explanation goes in the reply.",
+      "assertions": [
+        "The modified Lua contains no new comments describing validation, anticheat or economy logic",
+        "Existing comments in the user's file are preserved",
+        "The reply explains what changed, file and side",
+        "No secret values are printed"
+      ]
     }
   ],
   "execution_status": "Scenarios only; not executed by the Python/Bun unit suites. Record agent outputs and evidence separately."

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0 — 2026-10-08 — works on any server, from its resources folder
+
+- **Run from anywhere in the server:** every script defaults to the current directory. `project.py` finds the server root from `resources/` or any folder inside it, reads the txAdmin profile (`txData/<profile>/config.json`) to follow the cfg that is really launched (`cfgPath`, e.g. a dev cfg) and resolves `exec` paths from the server data folder. `--cfg` overrides.
+- **Stack detection** (`project.py` section `stack`): framework (ESX, Qbox, QBCore, ox_core, ND, vRP/Creative), ox_lib, DB driver (oxmysql, deprecated mysql-async/ghmattimysql), inventory, target, voice, phone, appearance; each row names the reference to read. Multiple frameworks/inventories are reported.
+- **New `scripts/logs.py`:** finds and summarises FXServer/txAdmin console logs (streams multi-GB files): script errors with first stack frame, load failures (`Cannot find module`), resources that did not start (escrow entitlement, missing category/resource, folders without manifest), thread hitches with worst interval, oxmysql slow queries and oversized result sets per resource, oversized streamed assets per resource, removed/internal convars, unknown commands, missing exec files, listing/license errors, state bag advisory, restarts/crashes, and secrets printed to the console (masked). `--last` for the last session. Built from the message formats of a real 50k-line server log and generalised.
+- **New `references/console-logs.md`:** what each console message means and how to fix it; routed from SKILL.md and used by `logs.py` output.
+- **Multi-framework `surface.py`:** vRP/Creative tunnel methods (`Tunnel.bindInterface`) are endpoints; QBCore/Qbox `Commands.Add`; sinks for vRP money/items/groups and ox_core account balances; balance-reading calls of vRP recognised. A function no longer counts as its own helper.
+- **No explanatory comments in shipped code:** SKILL.md output rule (client files are downloaded, server files leak in dumps; explain changes in the reply/PR) and `scaffold.py` strips Lua comments from generated resources (`--keep-comments` for learning). Never print secrets.
+- **Portability:** every script survives non-UTF-8 consoles (Windows cp1252, pipes) instead of crashing with `UnicodeEncodeError`.
+- **Knowledge:** "First contact with a server" workflow; "Common shapes of real servers" in project-adaptation.md (forked frameworks, in-memory money with long save timers, ban-on-invalid-input anti-pattern, secrets in repos, dev/prod cfg pairs, nested asset repos, escrow on dev keys); server-audit.md adds stack and console evidence to Phase 1 and to the coverage table.
+- Tests: `tests/fixtures/multi_framework` (QBCore, vRP, synthetic log) and `tests/test_portability.py`; 119 tests pass (32 optional skipped). Evals 20-21.
+
 ## 1.3.0 — 2026-10-08 — deterministic whole-server audits
 
 Motivation: two different models audited the same 35-resource ESX server with this skill and reported different findings. Both sampled handlers by hand; one never checked `data_file` paths, one called oxmysql 2.12.3 "up to date". The skill had the knowledge (baseline, authority checks) but no tool that enumerated the work, no coverage contract and no stop rule.

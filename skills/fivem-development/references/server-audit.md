@@ -37,10 +37,13 @@ item (backdoor indicators, §6 server authority, report wording).
 
 ## 3. Phase 1: server inventory
 ```
-python scripts/project.py <server root or resources dir>          # human report
-python scripts/project.py <path> --json > inventory.json           # keep for the report
+python scripts/project.py                     # from the server root, resources/ or any folder inside it
+python scripts/project.py --json > inventory.json
+python scripts/logs.py                        # runtime evidence: finds txData/<profile>/logs/fxserver.log
 ```
 It computes, the same way every time:
+- **stack:** framework, inventory, target, DB driver, voice, phone... with the reference to read for each. Review economy handlers against the installed owner of money/items, never against a template; multiple frameworks/inventories are a finding.
+- **launch cfg:** the txAdmin `cfgPath` when a txAdmin profile points at this server (dev and prod cfg pairs are common), else `server.cfg`; `--cfg` overrides.
 - **cfg:** `exec` chain from `server.cfg`, cfg files that are not exec'd (often `+exec` on the command line, analysed separately), convars set twice with different values, removed `sv_experimental*` convars.
 - **ensure:** `ensure`/`start` targets that match no folder or category (a typo such as `[cloth]` vs `[clothe]` silently starts nothing), resource names that exist twice, resources never started, dependencies started after their dependants.
 - **versions:** installed `fxmanifest.lua` version of every resource listed in `assets/baseline.json`, classified `< min-safe` / `< baseline` / `= baseline` / `> baseline` / `unknown`, with `file:line`. A fork may carry a stale manifest: say so, do not guess.
@@ -49,6 +52,8 @@ It computes, the same way every time:
 - **repo:** HEAD/dirty state, deleted tracked files, nested `.git`/`node_modules` in resources, `*.bat`/`*.cmd`/`*.ps1`/`*.sh` that reference missing files.
 
 Secrets in cfg files (`cfg-public-secret`, plaintext keys) come from Phase 2; `project.py` never prints values.
+
+`logs.py` adds what static analysis cannot see: resources that failed to start (escrow entitlement, missing category), script errors with their first stack frame, slow queries and oversized result sets per resource, hitches, oversized streamed assets and secrets printed to the console. Report its high/medium groups in the Inventory section, mark dev-only causes (escrow on a dev key, local endpoints) as such, and use [console-logs.md](console-logs.md) for meaning and fix.
 
 ## 4. Phase 2: heuristic scan and triage
 ```
@@ -147,6 +152,7 @@ Dismiss **only** when the stated condition holds; otherwise review normally.
 | Server entry points (surface.py) | n |
 | Ledger rows (sinks or tags) | r |
 | Rows: finding / ok / opaque / not-reviewed / TODO | a / b / c / d / 0 |
+| Console log analysed (logs.py) | file, sessions, or "none available" |
 | audit.py hits triaged (trust+SQL+backdoor) | t of T |
 | Opaque or escrowed resources | list |
 

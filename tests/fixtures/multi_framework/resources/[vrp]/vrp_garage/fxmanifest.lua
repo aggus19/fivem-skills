@@ -1,0 +1,7 @@
+fx_version 'cerulean'
+game 'gta5'
+name 'vrp_garage'
+author 'fixture'
+description 'Fixture: vRP/Creative tunnel methods are client-callable'
+version '1.0.0'
+server_script 'server.lua'

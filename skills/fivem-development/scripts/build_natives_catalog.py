@@ -224,7 +224,17 @@ def build_readme(rows: list, fetched: str, total: int, unnamed: int) -> str:
     return "\n".join(out) + "\n"
 
 
+def _safe_console():
+    """Never crash on consoles that cannot encode a character (Windows cp1252, redirected pipes)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main() -> int:
+    _safe_console()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "assets" / "natives"))
     ap.add_argument("--refresh", action="store_true", help="re-download the native DBs")

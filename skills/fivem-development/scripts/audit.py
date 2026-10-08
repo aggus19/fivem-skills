@@ -416,9 +416,19 @@ def audit(root: Path) -> list[Finding]:
     return findings
 
 
+def _safe_console():
+    """Never crash on consoles that cannot encode a character (Windows cp1252, redirected pipes)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main() -> int:
+    _safe_console()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("path")
+    ap.add_argument("path", nargs="?", default=".")
     ap.add_argument("--min", default="low", choices=list(SEV))
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()

@@ -1,6 +1,6 @@
 {
   "name": "fivem-skills",
-  "description": "FiveM development skills for AI coding agents",
+  "description": "FiveM (Cfx.re) development skills for AI coding agents: resource development, whole-server audits and console log analysis across ESX, QBCore, Qbox, ox_core, ND, vRP and standalone servers",
   "owner": {
     "name": "fivem-skills"
   },
@@ -8,13 +8,21 @@
     {
       "name": "fivem-development",
       "source": "./",
-      "description": "FiveM (Cfx.re) development skill: CfxLua, natives, OneSync, NUI, ox_lib/oxmysql/ox_inventory/ox_target, Qbox/QBCore/ESX, server ops, GTA V Enhanced and security audits. Baseline 2026-10-07.",
-      "version": "1.3.0",
+      "description": "FiveM (Cfx.re) development skill for any server and framework (ESX, QBCore, Qbox, ox_core, ND, vRP/Creative, standalone): create, debug, optimize and secure resources; whole-server audits with coverage ledgers; FXServer/txAdmin console log analysis; CfxLua, natives, OneSync, NUI, ox_lib/oxmysql/ox_inventory/ox_target, GTA V Enhanced. Baseline 2026-10-07.",
+      "version": "1.4.0",
       "category": "development",
       "tags": [
         "fivem",
         "lua",
-        "gamedev"
+        "gamedev",
+        "audit",
+        "security",
+        "performance",
+        "qbox",
+        "vrp",
+        "ox_core",
+        "fxserver",
+        "logs"
       ]
     }
   ]

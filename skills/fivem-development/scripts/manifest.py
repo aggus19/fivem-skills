@@ -145,13 +145,21 @@ def check(res: Path) -> tuple[list[str], list[str]]:
     return errors, warns
 
 
+def _safe_console():
+    """Never crash on consoles that cannot encode a character (Windows cp1252, redirected pipes)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main() -> int:
-    if len(sys.argv) < 2:
-        print(__doc__)
-        return 2
+    _safe_console()
+    args = sys.argv[1:] or ["."]
     total_err = 0
     targets = []
-    for arg in sys.argv[1:]:
+    for arg in args:
         res = Path(arg)
         if res.is_dir() and not (res / "fxmanifest.lua").exists() and not (res / "__resource.lua").exists():
             # A resources folder (or server root): check every resource below it, in a stable order.

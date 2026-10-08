@@ -1,0 +1,26 @@
+║             TXADMIN║ ======== [1001] FXServer Starting - 1/1/2026, 10:00:00
+[           resources] Scanning resources.
+[          svadhesive] Authenticating server license key...
+[ citizen-server-impl] Couldn't find resource category [maps].
+[ citizen-server-impl] You lack the required entitlement to use paid_resource
+[ citizen-server-impl] Couldn't start resource paid_resource.
+[   script:node_tool] Error loading script server.js in resource node_tool: Error: Cannot find module 'left-pad'
+[    c-scripting-core] Failed to load script server.js.
+[resources:carpack  ] Asset carpack/bigcar.ytd uses 64.0 MiB of physical memory. Oversized assets can and WILL lead to streaming issues (such as models not loading/rendering).
+[resources:carpack  ] Asset carpack/smallcar.yft uses 17.0 MiB of virtual memory.
+[     script:oxmysql] [11.4.5-MariaDB] Database server connection established!
+[     script:oxmysql] [11.4.5-MariaDB] qb_shop took 812ms to execute a query!
+[     script:oxmysql] Warning: qb_shop executed a query with an oversized result set (25000 results)!
+[ citizen-server-impl] server thread hitch warning: timer interval of 412 milliseconds
+[ citizen-server-impl] server thread hitch warning: timer interval of 1290 milliseconds
+[              server] Warning: `sv_endpointPrivacy` has been removed. Player endpoint addresses are no longer exposed.
+[                 cmd] No such config file: secrets.cfg
+[                 cmd] Argument count mismatch (passed 1, wanted 2)
+[      script:qb_shop] SCRIPT ERROR: @qb_shop/server.lua:5: attempt to index a nil value (local 'Player')
+[      script:qb_shop] > fn (@qb_shop/server.lua:5)
+[      script:qb_shop] SCRIPT ERROR: @qb_shop/server.lua:5: attempt to index a nil value (local 'Player')
+[                 cmd] set sv_licenseKey cfxk_abcdefghijklmnopqrstuvwxyz0123456789
+[     script:ox_lib] sv_stateBagStrictMode is currently DISABLED.
+║             TXADMIN║ Restarting server: Server process close detected.
+║             TXADMIN║ ======== [1002] FXServer Starting - 1/1/2026, 10:05:00
+[ citizen-server-impl] sync thread hitch warning: timer interval of 150 milliseconds

@@ -1,0 +1,7 @@
+fx_version 'cerulean'
+game 'gta5'
+name 'qb-core'
+author 'fixture'
+description 'Fixture stand-in for QBCore'
+version '1.3.0'
+server_script 'server.lua'

@@ -1,8 +1,8 @@
 {
   "name": "fivem-development",
   "displayName": "FiveM Development",
-  "version": "1.3.0",
-  "description": "FiveM (Cfx.re) development skill: CfxLua, natives, OneSync, NUI, ox_lib/oxmysql/ox_inventory/ox_target, Qbox/QBCore/ESX, server ops, GTA V Enhanced and security audits. Baseline 2026-10-07.",
+  "version": "1.4.0",
+  "description": "FiveM (Cfx.re) development skill for any server and framework (ESX, QBCore, Qbox, ox_core, ND, vRP/Creative, standalone): create, debug, optimize and secure resources; whole-server audits with coverage ledgers; FXServer/txAdmin console log analysis; CfxLua, natives, OneSync, NUI, ox_lib/oxmysql/ox_inventory/ox_target, GTA V Enhanced. Baseline 2026-10-07.",
   "author": {
     "name": "fivem-skills"
   },
@@ -15,10 +15,17 @@
     "qbox",
     "qbcore",
     "esx",
+    "ox_core",
+    "vrp",
     "ox_lib",
     "oxmysql",
     "nui",
     "txadmin",
-    "roleplay"
+    "fxserver",
+    "roleplay",
+    "audit",
+    "security",
+    "performance",
+    "logs"
   ]
 }

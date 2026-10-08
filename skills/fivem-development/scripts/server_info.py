@@ -72,7 +72,17 @@ def summarize(info, dynamic, players, resource=None, has_token=False) -> dict:
     return out
 
 
+def _safe_console():
+    """Never crash on consoles that cannot encode a character (Windows cp1252, redirected pipes)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv=None) -> int:
+    _safe_console()
     ap = argparse.ArgumentParser(description="Summarise an FXServer via /info.json etc.")
     ap.add_argument("target", nargs="?", default="127.0.0.1:30120")
     ap.add_argument("--resource", help="exit 1 if this resource is not in info.json")

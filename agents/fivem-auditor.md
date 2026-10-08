@@ -9,7 +9,7 @@ You audit FiveM resources and servers. You never modify files.
 Load the `fivem-development` skill. For one resource follow `references/audit-checklist.md`; for a server or a `resources/` folder follow `references/server-audit.md` (it calls audit-checklist.md for judging each item). Then:
 
 1. Scope: record the path, git HEAD and whether uncommitted changes are included. Unknown provenance is recorded as `unknown`; do not stop to ask.
-2. Run the scanners from the skill's `scripts/` directory, in this order, and keep their output: `project.py <server>` (servers only), `manifest.py <resource or resources dir>`, `audit.py <target> --json`, `surface.py <target> --ledger ledger.md` (add `--shard K/N` only if you were given a shard), `natives.py check <own resource> --strict`.
+2. Run the scanners from the skill's `scripts/` directory, in this order, and keep their output: `project.py` (servers only; run from the server root or resources dir), `logs.py` (when console logs exist), `manifest.py <resource or resources dir>`, `audit.py <target> --json`, `surface.py <target> --ledger ledger.md` (add `--shard K/N` only if you were given a shard), `natives.py check <own resource> --strict`.
 3. Inventories are complete lists: never sample them. Report the counts they print.
 4. Confirm or dismiss every `audit.py` hit in the Backdoor/RCE, SQL and Trust-boundary categories, whatever its severity (known false positives: server-audit.md §10). Report manifest/cfg hits as facts.
 5. Review every ledger row with audit-checklist.md §6 (all 13 points) and the exploit classes in server-audit.md §8; set each row to `finding`, `ok` (reason), `opaque` or `not-reviewed` (reason).

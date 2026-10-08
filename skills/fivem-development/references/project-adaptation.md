@@ -36,6 +36,26 @@ When a required contract remains unknown, inspect local source and matching prim
 documentation. Ask a narrow question only when the missing fact changes correctness;
 continue independent work. Never fabricate a compatible adapter for a custom/escrowed API.
 
+## Discover with the tools first
+
+From the server root, `resources/` or any folder inside it (no arguments needed):
+`python scripts/project.py` prints the installed stack with the reference for each part, the cfg that
+txAdmin really launches and its `exec` chain, installed versions against the baseline and broken
+`ensure`/`data_file` entries; `python scripts/logs.py` shows what fails at runtime. Use their output
+instead of assuming ESX, QBCore or a default layout.
+
+## Common shapes of real servers
+
+Seen repeatedly across community servers; check for them, do not assume them:
+- **Forked or renamed frameworks** ("ESX modified by ...", custom `core` resources wrapping the framework): the manifest version may be old while the code is custom. Read the installed functions (`removeAccountMoney` floors, account rounding, save loops) before relying on upstream behaviour.
+- **Money and items held in memory and saved on a long timer** (5-15 min): a crash loses or duplicates value. Look for a dirty-flag flush and a save on `txAdmin:events:serverShuttingDown`.
+- **One big custom resource with hundreds of callbacks** (jobs, shops, garages, robberies, VIP) next to vendored ox/framework code: the custom one holds most exploitable endpoints; vendored code is triaged once.
+- **"Ban on invalid input" handlers:** validation failures call a ban export. A UI bug or a fractional value then bans legitimate players while the real check (server price, ownership, distance) may still be missing. Prefer reject + log; ban only for impossible inputs.
+- **Secrets in the repository:** webhooks, bot tokens, license keys and DB strings in Lua or cfg files under version control. Report location only; recommend rotation and private `set` convars.
+- **Dev/prod cfg pairs** (`server-dev.cfg` + `server.cfg`, txAdmin `cfgPath` pointing at one of them) and per-environment `exec` files that may not exist on the other machine.
+- **Asset packs as nested git repositories inside `resources/`** (vehicles, clothing, maps): tens of GB, duplicated stream names, oversized textures, `data_file` paths that drift when folders are reorganised.
+- **Escrowed purchases** (casino, MLOs, vehicles) that do not start on a dev server with a different key: test them on the licensed server; never bypass escrow.
+
 ## Choose an implementation that fits
 
 - **Existing resource:** preserve its language, framework, UI and persistence owner.
