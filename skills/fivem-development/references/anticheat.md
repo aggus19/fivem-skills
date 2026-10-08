@@ -141,7 +141,7 @@ AddEventHandler('entityCreating', function(entity)
     local owner = NetworkGetFirstEntityOwner(entity)
     if Cfg.blacklistedModels[model] then
         AC.flag(owner, 'blacklisted-model', { model = model }, 3)
-        CancelEvent()                                   -- deletes the entity
+        if AC.enforce('blacklisted-model') then CancelEvent() end
         return
     end
     if GetEntityPopulationType(entity) == 7 and owner and owner > 0 then   -- 7 = mission (script-created)

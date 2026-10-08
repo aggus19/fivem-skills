@@ -7,5 +7,8 @@
   "cannot_carry": "No podés cargar eso",
   "too_far": "Estás demasiado lejos de la tienda",
   "invalid": "Solicitud inválida",
-  "cooldown": "Esperá un momento"
+  "cooldown": "Esperá un momento",
+  "unavailable": "Tienda no disponible.",
+  "busy": "Ya hay una compra en curso.",
+  "recovery_required": "Tu compra necesita una revision. Contacta al personal."
 }

@@ -1,11 +1,11 @@
 # Database design, tuning and scaling for FiveM
 
-Baseline: oxmysql 2.14.3 · MariaDB LTS **12.3** (12.3.3, 2026-08-22; previous LTS 11.8.9 / 11.4.13 / 10.11) · MySQL LTS **8.4** (8.4.12) and **9.7** (9.7.3, LTS since 2026-04-21) · verified 2026-10-07.
+Engine releases/support and tuning guidance re-reviewed **2026-10-08** against vendor sources. Driver/framework API baseline: 2026-10-07. Exact releases are a dated snapshot, not a permanent recommendation.
 API details (methods, placeholders, convars): [database-oxmysql.md](database-oxmysql.md). Server-side Lua performance in general: [performance.md](performance.md).
 
 ## Contents
 1. Choosing the database server (MariaDB vs MySQL, versions)
-2. Topology and hardware for 64 → 2000 players
+2. Topology and workload evidence
 3. my.cnf / my.ini tuning (with reasoning)
 4. Schema design rules
 5. Indexes for framework tables (ESX, QBCore, Qbox, ox_inventory)
@@ -22,104 +22,126 @@ API details (methods, placeholders, convars): [database-oxmysql.md](database-oxm
 
 ## 1. Choosing the database server
 
-The oxmysql docs recommend **MariaDB** "for compatibility, and improved performance (over all versions of MySQL)" and say **not to use XAMPP** (a dev web stack) — install MariaDB directly. Reasons that matter for FiveM:
-- Most community SQL was written for MySQL 5.7/MariaDB: MySQL 8+ adds reserved words (`group`, `rank`, `groups`) and rejects defaults on `LONGTEXT`/`JSON` columns (oxmysql docs).
-- Framework migrations use MariaDB-only syntax: Qbox runs `CREATE INDEX IF NOT EXISTS` and `ALTER TABLE … ADD COLUMN IF NOT EXISTS` (qbx_core). MySQL does not support `IF NOT EXISTS` on `CREATE INDEX` / `ADD COLUMN`, so those statements fail there.
+Choose from the project's driver, SQL migrations, plugins, hosting support and tested
+upgrade path. The oxmysql documentation favors MariaDB for compatibility; its broad
+performance claim is not a comparative benchmark of your workload. Preserve a healthy,
+supported MySQL installation when its scripts are compatible. Do not switch engines
+or install a DB for a feature that does not need one.
 
-| Line | Version to use (2026-10) | Support | Notes |
-|---|---|---|---|
-| MariaDB 12.3 LTS | **12.3.3** | to 2029-06-12 | Recommended for new installs. |
-| MariaDB 11.8 LTS | 11.8.9 | to 2030-02-13 (mariadb.org API) | Fine; very common in 2025–26 guides. |
-| MariaDB 11.4 / 10.11 LTS | 11.4.13 / 10.11.x | 2029-05 / 2028-02 | OK, plan upgrade. |
-| MariaDB 10.6 | — | **EOL 2026-07-06** | Upgrade. |
-| MariaDB 13.0 / 13.1 | rolling / RC | short | Avoid in production. |
-| MySQL 8.4 LTS | 8.4.12 | premier to 2029-04 | Use if you must run MySQL. |
-| MySQL 9.7 LTS | 9.7.3 | to 2031 premier | New LTS; less community testing with FiveM SQL. |
-| MySQL 8.0 | — | **EOL 2026-04-30** | Upgrade. |
+Vendor snapshot checked **2026-10-08**:
 
-Version facts: MariaDB downloads REST API and endoflife.date (see Sources). Re-verify: `curl -s https://downloads.mariadb.org/rest-api/mariadb/` and `curl -s https://endoflife.date/api/mysql.json`.
-
-Upgrade note: **MariaDB ≥ 11.6 changed the server default to `utf8mb4` / `utf8mb4_uca1400_ai_ci`** (previously latin1). Tables created after an upgrade can get a different collation from framework tables → "Illegal mix of collations" on joins and failed foreign keys. Pin the server collation (§3, §6).
-
-## 2. Topology and hardware
-
-| Size | Topology | Notes |
+| Engine line | Patch observed | Support / decision |
 |---|---|---|
-| ≤ 64 slots | DB on the FXServer host, bind 127.0.0.1 | 1–2 GB RAM for MariaDB is plenty. |
-| 64–300 | Same host OK if RAM/NVMe are sufficient; isolate CPU cores if possible | Loopback latency ≈ 0.1 ms. |
-| 300–2000 | **Dedicated DB host on the same LAN/datacenter** (< 0.5 ms RTT), NVMe, ECC RAM | Every query pays the round trip; a DB 20 ms away turns a 1 ms query into 21 ms. |
+| MariaDB 12.3 LTS | 12.3.3 | Community maintenance to 2029-06-12; candidate for new compatible deployments |
+| MariaDB 11.8 LTS | 11.8.9 | Community maintenance to **2028-06-04**, not an Enterprise/Extended date |
+| MariaDB 11.4 LTS | 11.4.13 | Community maintenance to 2029-05-29; retain when supported and compatible |
+| MariaDB 10.11 LTS | 10.11.19 | Community maintenance to 2028-02-16; assess the project's upgrade path |
+| MariaDB 10.6 | — | Community maintenance ended 2026-07-06; commercial/distribution support is a separate contract |
+| MySQL 8.4 LTS | 8.4.12 | Supported LTS candidate for compatible SQL; verify Oracle/package support policy |
+| MySQL 9.7 LTS | 9.7.3 | Supported LTS candidate; validate driver, SQL and operational tooling before migration |
 
-- Never point FXServer at a database in another region/hosting company: latency, not CPU, is the usual cause of "slow queries" on rented hosting. **UNVERIFIED** as a measured statistic; it follows directly from per-query round trips.
-- NVMe storage matters more than CPU for write-heavy servers (inventory/vehicle saves are large `LONGTEXT` rewrites).
-- One database per FXServer instance. Do not let a web panel, phone app API or Discord bot run heavy analytical queries on the production DB at peak; use a replica (`mariadb-backup` snapshot or replication) for stats.
-- The oxmysql debug UI is for development/small servers; "for larger servers, look into builtin MySQL logging" (oxmysql docs) → §9.
+Sources: [MariaDB maintenance policy](https://mariadb.org/about/#maintenance-policy),
+[Q3 maintenance releases](https://mariadb.org/mariadb-server-12-3-11-8-11-4-and-10-11-q3-2026-maintenance-releases-and-goodbye-10-6/),
+[MySQL 8.4 release notes](https://dev.mysql.com/doc/relnotes/mysql/8.4/en/),
+[MySQL 9.7 release notes](https://dev.mysql.com/doc/relnotes/mysql/9.7/en/) and
+[MySQL release policy](https://dev.mysql.com/doc/refman/9.7/en/mysql-releases.html).
 
-## 3. my.cnf / my.ini tuning
+Before recommending a version **today**, re-open vendor release/download and support
+pages; confirm GA availability in the selected OS/package channel. Record date, engine,
+edition, patch, support channel and compatibility reason. Release notes can list a
+not-yet-downloadable version. Prefer an appropriate maintained LTS for conservative
+operations; a higher number or rolling channel alone is not a performance argument.
 
-Location: Linux `/etc/mysql/mariadb.conf.d/50-server.cnf` (Debian/Ubuntu) or `/etc/my.cnf.d/server.cnf` (RHEL); Windows MSI `C:\Program Files\MariaDB 12.3\data\my.ini`. Restart the service after editing (`systemctl restart mariadb`, or Services → MariaDB).
+Compatibility gates:
+- Inspect actual migrations. Qbox migrations in the baseline use MariaDB-specific
+  `CREATE INDEX IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`; test the installed fork.
+- MySQL's expression defaults can support TEXT/JSON: `DEFAULT ('{}')` is different
+  from an unparenthesized literal. Do not claim MySQL 8+ forbids all TEXT/JSON defaults.
+- MariaDB 12.3 changed `innodb_snapshot_isolation` to ON by default. Test transaction
+  conflicts/rollback/retry behavior under the new isolation behavior before upgrading.
+- MariaDB >= 11.6 changed default charset/collation to utf8mb4/uca1400. Inspect existing
+  tables and explicitly select compatible collations instead of assuming defaults match.
+- Verify authentication/TLS support in the installed driver, reserved words, JSON types,
+  SQL modes, transaction isolation and migration syntax on the target engine.
 
-```ini
-[mysqld]
-# --- network / safety ---
-bind-address              = 127.0.0.1        # DB on same host; use the LAN IP + firewall otherwise
-skip-name-resolve         = ON               # no reverse DNS per connection; grant users by IP
-max_connections           = 200              # see reasoning below
-max_allowed_packet        = 64M              # large multi-row upserts / big JSON blobs
+For a new compatible ox deployment, evaluate MariaDB 12.3 LTS and the project's tested
+maintained alternatives. For an existing deployment, first explain the measured problem
+or support need. Test backup restore, migrations and application operations in staging;
+major upgrades/downgrades need a recovery plan, not an assumed reversible package switch.
+**No engine version guarantees the absence of FXServer hitches.** See `hitch-diagnostics.md`.
 
-# --- character set (match framework tables: utf8mb4_unicode_ci) ---
-character-set-server      = utf8mb4
-collation-server          = utf8mb4_unicode_ci
+## 2. Topology and workload evidence
 
-# --- InnoDB memory ---
-innodb_buffer_pool_size   = 4G               # see sizing table
-# --- InnoDB durability / IO ---
-innodb_flush_log_at_trx_commit = 1           # 2 = faster commits, may lose ~1 s on OS crash/power loss
-innodb_log_file_size      = 1G               # MariaDB; MySQL 8.0.30+ uses innodb_redo_log_capacity
-innodb_io_capacity        = 1000             # NVMe/SSD; leave default on HDD
-innodb_file_per_table     = ON               # default; lets OPTIMIZE TABLE reclaim space
-# innodb_flush_method     = O_DIRECT         # Linux only; avoids double buffering with the OS cache
+Player slots are not a capacity model. Record query arrival rate, concurrent operations,
+hot data/index size, result sizes, writes/second, lock waits, memory/IO pressure, pool
+queue time and application latency at representative load.
 
-# --- temp tables / caches ---
-tmp_table_size            = 64M
-max_heap_table_size       = 64M
-table_open_cache          = 4000
-query_cache_type          = 0                # MariaDB: keep the query cache off (removed in MySQL 8)
-query_cache_size          = 0
-
-# --- diagnostics ---
-slow_query_log            = ON
-slow_query_log_file       = /var/log/mysql/mariadb-slow.log   # Windows: omit, defaults to the data dir
-long_query_time           = 0.5
-```
-
-| Setting | Reasoning for FiveM |
+| Option | Evaluate |
 |---|---|
-| `innodb_buffer_pool_size` | The single most important value. Keep the whole working set (players, vehicles, inventory, stashes) in RAM so reads never touch disk. MariaDB docs: up to ~80 % of RAM on a dedicated DB server. On a shared FXServer host, leave RAM for FXServer (often 4–16 GB at high slot counts) and the OS. Default 128 MiB is far too small for any live server. |
-| `innodb_flush_log_at_trx_commit` | `1` = full durability (default). `2` writes the redo log at each commit but flushes about once a second — an OS crash or power loss can lose the last second (MariaDB docs). For RP data that is usually acceptable on slow disks; on NVMe keep `1`. Never `0` on a server with an economy (a mysqld crash loses up to 1 s → potential dupes/rollbacks). |
-| `innodb_log_file_size` | Bigger redo log = fewer checkpoint flushes for write-heavy autosaves; costs longer crash recovery. Dynamic since MariaDB 10.9. 512M–2G is typical. |
-| `max_connections` | Sum of: oxmysql pool (`connectionLimit`, default 10) × FXServer instances + txAdmin/panels/bots/backups + admin sessions. 100–200 covers nearly every server; huge values only waste per-thread memory. "Too many connections" usually means a leak in an external tool, not FiveM. |
-| `skip-name-resolve` | Avoids DNS lookups on each new connection (oxmysql re-opens idle-closed pool connections). Users must then be granted by IP (`'fivem'@'127.0.0.1'`), not hostname. |
-| Query cache off | Global mutex invalidated on every write; FiveM workloads write constantly. Cache in Lua instead (§7.4). |
-| `tmp_table_size` | `GROUP BY`/`ORDER BY` on unindexed columns spill to disk temp tables; raise moderately, but fix the query first. |
+| DB on FXServer host | Low transport overhead; contention for CPU, RAM and storage, including backups |
+| Separate DB on nearby private network | Isolation and operations cost versus measured RTT, bandwidth and availability |
+| Managed DB | Supported engine/features, connection/TLS limits, maintenance/failover behavior and cost |
+| Read replica for analytics | Replication lag and consistency; never use stale balance/permission reads to authorize mutations |
 
-Buffer pool sizing guide (rule of thumb, **UNVERIFIED** as hard numbers — measure `SELECT ROUND(SUM(data_length+index_length)/1024/1024) AS mb FROM information_schema.tables WHERE table_schema = DATABASE();`):
+A remote query includes network and driver overhead; several sequential round trips
+accumulate latency. Measure it rather than asserting a universal 0.1/0.5 ms threshold.
+NVMe may help IO-bound work; it cannot fix an unindexed query or serialized lock contention.
+Use separate schema/credentials per server unless deliberate shared ownership is designed.
+Schedule heavy analytics/backups with observed headroom; measure them under load.
 
-| Server | Typical DB size | `innodb_buffer_pool_size` |
-|---|---|---|
-| Dev / ≤ 32 slots | < 500 MB | 512M–1G |
-| 64–200 slots | 0.5–3 GB | 2–4G |
-| 200–600 slots | 2–10 GB | 4–12G |
-| 600–2000 slots (dedicated DB host) | 5–40 GB | DB size × 1.2, up to ~70–80 % of host RAM |
+## 3. my.cnf / my.ini tuning with a correctness budget
 
-Check effectiveness: `SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_read%';` — `Innodb_buffer_pool_reads` (disk) should be < 1 % of `Innodb_buffer_pool_read_requests`.
+Inspect the **effective** configuration and service startup arguments first. Distribution,
+container and Windows service paths differ. Verify each setting's availability, units,
+scope and restart requirements for the exact engine/version before editing it. Preserve
+the original configuration and change one justified variable or related group at a time.
 
-Dedicated DB user (never `root` from FXServer):
+| Setting / concern | Decision and validation |
+|---|---|
+| Buffer pool | Size for the active InnoDB working set and available memory after OS, FXServer, connections and other caches. Avoid paging; dataset size alone is not the working set. The vendor's dedicated-DB percentage is not for a shared game host. |
+| Connections / driver pool | Budget all FXServer pools, panels, jobs and admin headroom; observe busy connections and wait time. A larger pool can increase contention and tail latency. Bound application admission/queues before increasing capacity. |
+| Redo capacity | Tune from write/checkpoint pressure and recovery objectives; MariaDB and MySQL use different variables. Do not copy `innodb_log_file_size` into every version. |
+| IO capacity / flush method | Match actual sustained storage behavior and platform/version defaults. No universal NVMe IOPS setting. |
+| Temporary tables / caches | Fix query shape and indexes first; account for concurrent allocations. Raising every per-session buffer risks exhausting shared host RAM. |
+| Charset / collation | Match existing key/join semantics and migrations; case/accent folding can change uniqueness. Changing the server default does not convert existing tables. |
+| Slow logs | Set a threshold appropriate to the observed workload and capture duration; correlate with query digests/locks and FXServer timings. Rotate and protect logs. |
+| Packet / batch limits | Bound bytes as well as rows. Increasing packet limits does not make unlimited JSON or huge transactions efficient. |
+
+Keep durable commits as the default for money, inventory and ownership. With conventional
+InnoDB/binlog configuration, use `innodb_flush_log_at_trx_commit=1` and, when binary
+logging is enabled, `sync_binlog=1` for crash durability/consistency, subject to the
+storage system honoring flushes. MariaDB's optional InnoDB-based binlog uses a different
+mechanism: `sync_binlog` is ignored there; inspect the selected binlog engine.
+
+`innodb_flush_log_at_trx_commit=2` defers redo flushing and can lose acknowledged
+transactions after an OS crash/power loss. The periodic flush is not a strict one-second
+loss bound. Do not offer it as a routine hitch fix or decide that losing RP data is
+acceptable. A relaxation requires the owner's explicit recovery-point objective and
+crash/recovery tests, including reconciliation with other data owners and replicas.
+
+Read-only initial inspection, using an authorized connection:
+
 ```sql
-CREATE USER 'fivem'@'127.0.0.1' IDENTIFIED BY 'LongAlphanumericPassword123';
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, REFERENCES ON fivem.* TO 'fivem'@'127.0.0.1';
--- Scripts that auto-migrate need CREATE/ALTER/INDEX; remove DROP once the schema is stable if you can.
+SELECT VERSION(), @@version_comment;
+SHOW VARIABLES LIKE 'innodb_buffer_pool_size';
+SHOW VARIABLES LIKE 'innodb_flush_log_at_trx_commit';
+SHOW VARIABLES LIKE 'sync_binlog';
+SHOW VARIABLES LIKE 'max_connections';
+SHOW GLOBAL STATUS LIKE 'Threads%';
+SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_read%';
+SHOW GLOBAL STATUS LIKE 'Innodb_row_lock%';
 ```
-Never expose port 3306 to the internet; if a remote panel needs access, use an SSH tunnel/VPN or a firewall allow-list.
+
+Compare **counter deltas over the same interval**, not lifetime ratios or absolute
+counts alone. A high cache hit ratio can coexist with expensive scans/locks; connect it
+to latency, physical reads and workload. No single ratio establishes DB health.
+
+Use a dedicated runtime account with needed DML privileges. Give schema migration
+privileges through a separate deployment identity where supported; auto-migrating
+resources need their documented DDL privileges at migration time. Do not prescribe
+DROP/ALTER grants to every runtime by default. Bind/firewall access to required hosts;
+for remote connections verify encrypted transport and certificate validation supported
+by the driver. Keep passwords out of examples, command-line arguments and shared files.
 
 ## 4. Schema design rules
 
@@ -209,7 +231,14 @@ EXPLAIN SELECT plate, glovebox FROM owned_vehicles WHERE owner = 'char1:abc';
 | `type` | `const`, `eq_ref`, `ref`, `range` | `ALL` (full scan), `index` (full index scan) |
 | `key` | an index name | `NULL` |
 | `rows` | small | ≈ table size |
-| `Extra` | `Using index` | `Using filesort`, `Using temporary` on big tables |
+| `Extra` | Covering access can reduce reads | Sort/temp work needs cost analysis, not an automatic failure verdict |
+
+These are clues, not binary pass/fail rules: a small-table scan may be cheaper than
+an index; filesort does not necessarily mean a disk sort. Check cardinality, selectivity,
+rows examined and workload. Composite/covering indexes trade reads for write/storage
+cost; inspect existing indexes before adding or removing one. `ANALYZE` executes the
+statement (including writes for MariaDB UPDATE/DELETE); use controlled data and an
+authorized workload, not an assumed read-only diagnostic.
 
 ### 7.2 Avoid N+1
 ```lua
@@ -225,7 +254,7 @@ if #plates > 0 then
     for i = 1, #rows do ownerByPlate[rows[i].plate] = rows[i].owner end
 end
 ```
-Also: never query inside a per-frame/per-second loop or inside `playerConnecting` for data you can preload once at resource start (items, jobs, shops — ESX loads `jobs`, `job_grades` and `items` once).
+Bound and deduplicate the server-authorized plate list before batching; split large lists by measured byte/parameter/work limits. Cache stable definitions with an explicit invalidation policy. Avoid redundant polling; connection-time authorization that needs current DB state must not be replaced by an indefinitely stale preload.
 
 ### 7.3 Batch writes
 Real framework patterns:
@@ -233,106 +262,63 @@ Real framework patterns:
 - **ox_inventory** `db.saveInventories`: one `prepare.await` batch per category (players, trunks, gloveboxes) in parallel threads; stashes with a single multi-row `INSERT … VALUES (?, ?, ?), (?, ?, ?) … ON DUPLICATE KEY UPDATE` when `inventory:bulkstashsave` is true (default).
 - **Qbox** saves each player on an interval (`updateInterval = 5` minutes) with an `UPDATE … WHERE citizenid = :citizenid`.
 
-```lua
--- server: batch upsert of N rows in one round trip, chunked to stay under max_allowed_packet
-local function bulkUpsertStashes(rows) -- rows = { { owner, name, dataJson }, ... }
-    local CHUNK = 500
-    for first = 1, #rows, CHUNK do
-        local last = math.min(first + CHUNK - 1, #rows)
-        local values, params = {}, {}
-        for i = first, last do
-            values[#values + 1] = '(?, ?, ?)'
-            local r = rows[i]
-            params[#params + 1] = r[1]
-            params[#params + 1] = r[2]
-            params[#params + 1] = r[3]
-        end
-        MySQL.query.await(('INSERT INTO `ox_inventory` (`owner`, `name`, `data`) VALUES %s ON DUPLICATE KEY UPDATE `data` = VALUES(`data`)')
-            :format(table.concat(values, ', ')), params)
-    end
-end
-```
+For custom data owned by this resource, design a bounded batch:
+1. Snapshot immutable payloads with per-key versions; retain dirty state until confirmed.
+2. Bound both rows **and encoded bytes/parameters** per chunk. A 500-row limit alone
+   does not keep large JSON under `max_allowed_packet` or bound script serialization time.
+3. Use placeholders for values and fixed/whitelisted SQL identifiers.
+4. Check each chunk result; acknowledge only the versions actually submitted. A later
+   chunk failing does not roll back earlier independently committed chunks.
+5. Use one explicit transaction only where the business operation requires atomicity;
+   keep it bounded and avoid external calls inside its locks.
+
+Do not write directly to framework/inventory-owned tables while their memory state can
+later overwrite your changes. Use their persistence owner. See the tested versioned
+progress queue below for non-economic data and its explicit crash-loss limits.
+
 `VALUES(col)` in `ON DUPLICATE KEY UPDATE` works on MariaDB and MySQL (deprecated on MySQL 8.0.20+ in favour of a row alias, which MariaDB does not support) — keep `VALUES()` for portability.
 
 | Approach | Round trips | Use |
 |---|---|---|
-| Loop of `MySQL.update` | N, N pool checkouts | never for > 10 rows |
+| Loop of `MySQL.update` | N queries/checkouts | Small independent operations where measured cost fits; otherwise bound/batch the workload |
 | `MySQL.prepare` with N parameter sets | N on one connection, statement parsed once | different rows, same statement (ESX, ox_inventory) |
 | Multi-row `VALUES (…),(…)` | 1 per chunk | inserts/upserts of many rows |
 | `MySQL.transaction` | N in one transaction | must be atomic |
 
 ### 7.4 Cache in Lua, write behind
-For 200–2000 players the DB should mostly see: one load at join, periodic dirty saves, one save at drop. Reads during play come from memory.
+Use only for custom, non-economic progress with an explicitly accepted crash-loss window. One resource/process must own each key. Framework money and inventory keep their existing persistence owner.
+
+Copy [versioned_store.lua](../assets/examples/versioned_store.lua) into `server/versioned_store.lua` and load it with ox_lib's `require` (server file; do not put it in `files`). The module stores serialized snapshots, not mutable table references. It has a bounded queue, permits only one in-flight write per key, acknowledges exactly the submitted generation, and retains unsaved released entries for retry.
 
 ```lua
--- server/cache.lua — write-behind cache for a custom per-character table
-local cache = {}      -- [citizenid] = { data = table, dirty = boolean }
-local SAVE_INTERVAL = 5 * 60 * 1000
+-- server; MySQL schema: my_progress(citizenid PRIMARY KEY, data LONGTEXT NOT NULL)
+local newStore = require 'server.versioned_store'
+local saves = newStore(function(citizenid, payload)
+    local result = MySQL.update.await(
+        'INSERT INTO my_progress (citizenid, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)',
+        { citizenid, payload })
+    return type(result) == 'number' -- 0 can be a successful no-change upsert
+end, 4096)
 
-local function load(citizenid)
-    local entry = cache[citizenid]
-    if entry then return entry.data end
-    local raw = MySQL.scalar.await('SELECT `data` FROM `my_progress` WHERE `citizenid` = ?', { citizenid })
-    entry = { data = raw and json.decode(raw) or {}, dirty = false }
-    cache[citizenid] = entry
-    return entry.data
+-- After validating a custom progress mutation, enqueue an immutable snapshot.
+-- Check the result BEFORE reporting that the mutation was accepted.
+local function queueProgress(citizenid, data)
+    return saves.put(citizenid, json.encode(data))
 end
 
-local function markDirty(citizenid)
-    local entry = cache[citizenid]
-    if entry then entry.dirty = true end
+-- On character unload: stop admitting that session's mutations first.
+-- A failed flush stays pending; release does not discard it.
+local function unloadProgress(citizenid)
+    saves.flush(citizenid)
+    saves.release(citizenid)
 end
-
-local function flush(onlyCitizenid)
-    local sets = {}
-    for citizenid, entry in pairs(cache) do
-        if entry.dirty and (not onlyCitizenid or citizenid == onlyCitizenid) then
-            sets[#sets + 1] = { citizenid, json.encode(entry.data) }
-            entry.dirty = false
-        end
-    end
-    if #sets == 0 then return end
-    local ok, err = pcall(MySQL.prepare.await,
-        'INSERT INTO `my_progress` (`citizenid`, `data`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `data` = VALUES(`data`)', sets)
-    if not ok then
-        print(('^1[my_progress] save failed: %s^0'):format(err))
-        for i = 1, #sets do                       -- re-mark so the next flush retries
-            local entry = cache[sets[i][1]]
-            if entry then entry.dirty = true end
-        end
-    end
-end
-
-CreateThread(function()
-    while true do
-        Wait(SAVE_INTERVAL)
-        flush()
-    end
-end)
-
--- save + evict on drop (playerDropped gives the server id; map it to your citizenid)
-AddEventHandler('my_progress:server:characterUnloaded', function(citizenid)
-    flush(citizenid)
-    cache[citizenid] = nil
-end)
-
--- txAdmin scheduled restart / shutdown
-AddEventHandler('txAdmin:events:serverShuttingDown', function()
-    flush()
-end)
-
-exports('getProgress', load)
-exports('setProgress', function(citizenid, key, value)
-    local data = load(citizenid)
-    data[key] = value
-    markDirty(citizenid)
-end)
 ```
-Notes:
-- Only **dirty** rows are written; most players have nothing new every interval.
-- Stagger big periodic jobs (don't run every resource's autosave at the same minute).
-- Flushing in `onResourceStop` is best-effort: whether queued async queries finish during a full server stop is **UNVERIFIED** — rely on txAdmin's shutdown event and periodic saves.
-- Money/items that can be duplicated must be saved on every change or validated transactionally — don't write-behind an economy without understanding the crash window.
+
+Call `flushAll()` periodically with a workload-appropriate interval; record queue age, failures and backpressure. `queue_full` must reject/defer the mutation, never silently drop an older entry. Drain after stopping new mutations during a graceful shutdown. `onResourceStop` is not a durability guarantee; process crashes lose pending memory even with correct retry handling.
+
+This is a **write queue**, not a complete read cache or distributed lock. Coalesce concurrent loads separately; do not return live mutable tables to callers, reload stale DB values over newer pending state, or let a second process write the same keys. Reconnecting characters must reuse the authoritative in-memory state until pending writes are acknowledged. Test your framework's unload/load hooks and actual oxmysql error behavior in FXServer.
+
+Evidence: module logic is exercised with Lua 5.4 and injected yielding/failing writers. SQL adapter, framework integration and crash durability require a real database/server test; no speedup is asserted.
 
 ### 7.5 Atomic updates instead of read-modify-write
 ```lua
@@ -353,31 +339,19 @@ if affected ~= 1 then return false end   -- insufficient funds (or no such row)
 - oxmysql sets **READ COMMITTED** on all pool connections by default (`mysql_transaction_isolation_level 2`), which takes fewer gap locks than InnoDB's default REPEATABLE READ.
 - `SELECT … FOR UPDATE` inside `MySQL.startTransaction` locks rows until commit — use for "check balance then debit across tables". `LOCK IN SHARE MODE` / `FOR SHARE` for read-only consistency.
 - Keep transactions short: oxmysql aborts `startTransaction` after 30 s and holds one pool connection for its duration.
-- **Deadlocks** (error 1213, `ER_LOCK_DEADLOCK`) happen when two transactions lock the same rows in different orders. InnoDB rolls one back. Prevent: lock rows in a consistent order (e.g. sort the two citizenids before a transfer), touch as few rows as possible, avoid long transactions. Handle: retry a small number of times.
+- **Deadlocks** (error 1213, `ER_LOCK_DEADLOCK`) happen when two transactions lock the same rows in different orders. InnoDB rolls one back. Prevent: lock rows in a consistent order (e.g. sort the two citizenids before a transfer), touch as few rows as possible, avoid long transactions. Handle: retry a bounded number of times only when rollback is confirmed; ambiguous commits require reconciliation by operation ID.
+The transaction body in [transfer.lua](../assets/examples/transfer.lua) validates bounded positive integer amounts, locks both existing accounts in a consistent order, and checks **both** affected-row counts. A missing receiver or rejected credit rolls the whole transaction back.
+
 ```lua
-local function transfer(fromCid, toCid, amount)
-    local a, b = fromCid, toCid
-    if b < a then a, b = b, a end                         -- consistent lock order
-    for attempt = 1, 3 do
-        local insufficient = false
-        local ok = MySQL.startTransaction(function(query)
-            query('SELECT citizenid FROM bank_accounts WHERE citizenid IN (?, ?) ORDER BY citizenid FOR UPDATE', { a, b })
-            local res = query('UPDATE bank_accounts SET balance = balance - ? WHERE citizenid = ? AND balance >= ?',
-                { amount, fromCid, amount })
-            if res.affectedRows ~= 1 then
-                insufficient = true
-                return false                                  -- business rule: rollback, no retry
-            end
-            query('UPDATE bank_accounts SET balance = balance + ? WHERE citizenid = ?', { amount, toCid })
-        end)
-        if ok then return true end
-        if insufficient then return false end
-        -- otherwise an SQL error (deadlock, lock wait timeout...) was logged via oxmysql:error; retry briefly
-        Wait(50 * attempt)
-    end
-    return false
-end
+-- Copy the example to server/transfer.lua; this is a local module, not a framework API.
+local transferBody = require 'server.transfer'
+local ok, reason = transferBody(MySQL.startTransaction, fromCid, toCid, amount)
 ```
+
+This is an illustrative transaction body for **custom InnoDB `bank_accounts`**, with unique `citizenid` and bounded integer `balance`. It is not a complete banking endpoint. The service must authenticate ownership, enforce permissions/rate limits, and atomically store a durable operation ID plus debit/credit ledger records in that same transaction before deployment. Do not use SQL to overwrite live framework-owned balances.
+
+There is deliberately no automatic retry: `startTransaction` returns a boolean without classifying deadlocks versus connection/commit uncertainty. Retry only a classified rolled-back transaction, or reconcile using the durable operation ID and reuse it. An ambiguous result must not lead to a second untracked transfer. Lua tests use an injected transaction adapter; actual InnoDB locking, constraints and commit-failure behavior remain integration tests.
+
 - Inspect: `SHOW ENGINE INNODB STATUS\G` (section LATEST DETECTED DEADLOCK); `innodb_print_all_deadlocks = ON` logs all of them; lock waits: `SELECT * FROM information_schema.innodb_trx;` (MariaDB) / `performance_schema.data_lock_waits` (MySQL).
 - `innodb_lock_wait_timeout` (default 50 s) is far too long for a game server request; consider 5–10 s at session/global level so stuck requests fail fast. **UNVERIFIED** as a community norm; it is a judgment call.
 
@@ -394,7 +368,7 @@ SET GLOBAL log_slow_verbosity = 'query_plan,explain';
 ```
 Analyse: `mariadb-dumpslow -s t /var/log/mysql/mariadb-slow.log | head -50` (or `mysqldumpslow`), or Percona Toolkit `pt-query-digest`.
 
-oxmysql side: `set mysql_slow_query_warning 100` in production prints offenders with resource name and parameters. Remember the oxmysql number includes queueing and server hitches ("slow queries may not indicate a database issue", docs) — confirm in the DB slow log.
+oxmysql side: choose `mysql_slow_query_warning` for the capture (e.g. 100 ms when investigating that latency class). Logs can contain resource names and parameters; limit retention/access and restore temporary settings. Driver timing can include scheduling/transport overhead; confirm what the installed version times and correlate with DB logs. A driver warning alone does not prove a slow SQL execution or a blocked FXServer thread.
 
 Quick health queries:
 ```sql
@@ -415,15 +389,17 @@ FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY mb DESC 
 
 ```bash
 # Logical, consistent for InnoDB without locking the game (--single-transaction)
-mariadb-dump --single-transaction --quick --routines --triggers --events \
-  -u backup -p'***' fivem | gzip > /backups/fivem_$(date +%F_%H%M).sql.gz
+mariadb-dump --defaults-extra-file=/secure/backup-client.cnf \
+  --single-transaction --quick --routines --triggers --events fivem | gzip > /backups/fivem_$(date +%F_%H%M).sql.gz
 
 # Physical (MariaDB)
-mariadb-backup --backup --target-dir=/backups/full_$(date +%F) --user=backup --password='***'
+mariadb-backup --defaults-extra-file=/secure/backup-client.cnf --backup --target-dir=/backups/full_$(date +%F)
 mariadb-backup --prepare --target-dir=/backups/full_2026-10-07
 # restore: stop MariaDB, empty datadir, then
 mariadb-backup --copy-back --target-dir=/backups/full_2026-10-07 && chown -R mysql:mysql /var/lib/mysql
 ```
+Store backup credentials in a restricted option file; validate tool/engine compatibility and capture command exit status. A pipeline producing a file is not proof of a complete backup. `--single-transaction` requires transactional tables and coordination with concurrent DDL.
+
 Windows: `"C:\Program Files\MariaDB 12.3\bin\mariadb-dump.exe"` scheduled with Task Scheduler.
 
 Rules: schedule at least daily + before every framework/resource update; keep copies off the machine (3-2-1); a backup user with `SELECT, SHOW VIEW, TRIGGER, LOCK TABLES, EVENT, RELOAD, PROCESS` only; **test restores** on a dev DB; binary log (`log_bin`) enables point-in-time recovery after a dupe exploit or a bad script wiped tables. oxmysql keeps `multipleStatements` off precisely because of injected `DROP TABLE` incidents (oxmysql #154 links the Cfx forum thread "database tables are deleted").
@@ -438,9 +414,9 @@ Rules: schedule at least daily + before every framework/resource update; keep co
 
 | Do | Don't |
 |---|---|
-| MariaDB 12.3/11.8 LTS, dedicated user, bind localhost/LAN | XAMPP, `root` without password, port 3306 open to the internet |
-| Size `innodb_buffer_pool_size` to the data set | Leave the 128 MiB default on a live server |
-| Index every column in `WHERE`/`JOIN` of hot queries; `EXPLAIN` new queries | Add indexes blindly to every column |
+| Maintained compatible engine, dated vendor verification, dedicated user | Treat latest engine or an engine switch as a hitch cure |
+| Size the buffer pool from workload and available memory | Copy a slot-based memory preset or cause host paging |
+| Design useful composite indexes from hot query plans and selectivity | Index every WHERE column blindly or ignore write/storage cost |
 | Load once, cache in Lua, save dirty rows in batches | Query per frame/tick or save every player every few seconds |
 | `prepare` batches / multi-row upserts | Loops of single queries |
 | Atomic `UPDATE … WHERE balance >= ?` | Read, compute in Lua, write back (race) |
@@ -457,8 +433,8 @@ Rules: schedule at least daily + before every framework/resource update; keep co
 - QBCore: https://github.com/qbcore-fivem/qb-core/blob/main/qbcore.sql · https://github.com/qbcore-fivem/qb-vehicleshop/blob/main/vehshop.sql · https://github.com/qbcore-fivem/qb-garages/blob/main/player_vehicles.sql
 - Qbox: https://github.com/Qbox-project/qbx_core/blob/main/qbx_core.sql · https://github.com/Qbox-project/qbx_core/blob/main/server/storage/players.lua · https://github.com/Qbox-project/qbx_core/blob/main/config/server.lua · https://github.com/Qbox-project/qbx_vehicles/blob/main/vehicles.sql
 - ox_inventory DB module: https://github.com/overextended/ox_inventory/blob/main/modules/mysql/server.lua · https://github.com/overextended/ox_inventory/blob/main/init.lua
-- MariaDB versions: https://downloads.mariadb.org/rest-api/mariadb/ · https://endoflife.date/mariadb
-- MySQL versions: https://endoflife.date/mysql · https://dev.mysql.com/doc/relnotes/mysql/9.7/en/ · https://dev.mysql.com/doc/relnotes/mysql/8.4/en/
+- MariaDB releases/support: https://mariadb.org/about/#maintenance-policy · https://mariadb.org/mariadb-server-12-3-11-8-11-4-and-10-11-q3-2026-maintenance-releases-and-goodbye-10-6/ · https://mariadb.org/mariadb-server-12-3-lts-released/
+- MySQL versions/policy: https://dev.mysql.com/doc/refman/9.7/en/mysql-releases.html · https://dev.mysql.com/doc/relnotes/mysql/9.7/en/ · https://dev.mysql.com/doc/relnotes/mysql/8.4/en/
 - MariaDB InnoDB variables: https://mariadb.com/docs/server/server-usage/storage-engines/innodb/innodb-system-variables · buffer pool: https://mariadb.com/docs/server/server-usage/storage-engines/innodb/innodb-buffer-pool
 - MariaDB slow query log: https://mariadb.com/docs/server/server-management/server-monitoring-logs/slow-query-log/slow-query-log-overview
 - MariaDB EXPLAIN: https://mariadb.com/docs/server/reference/sql-statements/administrative-sql-statements/analyze-and-explain-statements/explain
@@ -467,3 +443,7 @@ Rules: schedule at least daily + before every framework/resource update; keep co
 - MySQL InnoDB: https://dev.mysql.com/doc/refman/8.4/en/innodb-parameters.html · https://dev.mysql.com/doc/refman/8.4/en/innodb-deadlocks.html · https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html
 - Tools: https://www.heidisql.com/ · https://dbeaver.io/
 - mysql2 pool defaults: https://github.com/sidorares/node-mysql2/blob/v3.24.5/lib/pool_config.js
+
+- Commit durability: https://mariadb.com/docs/server/server-management/server-monitoring-logs/binary-log/group-commit-for-the-binary-log · https://mariadb.com/docs/server/server-management/server-monitoring-logs/binary-log/innodb-based-binary-log
+- MySQL expression defaults: https://dev.mysql.com/doc/refman/8.4/en/data-type-defaults.html
+- MariaDB ANALYZE execution semantics: https://mariadb.com/docs/server/reference/sql-statements/administrative-sql-statements/analyze-and-explain-statements/analyze-statement

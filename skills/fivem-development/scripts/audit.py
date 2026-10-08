@@ -20,8 +20,10 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from resource_files import ManifestError, nearest_manifest, script_sides, walk_files
+
 SEV = {"low": 0, "medium": 1, "high": 2, "critical": 3}
-SKIP_DIRS = {"node_modules", ".git", "dist", "build", ".next", "stream"}
 CODE_EXT = {".lua", ".js", ".ts", ".cs", ".tsx", ".jsx", ".mjs", ".cjs", ".vue", ".svelte", ".html", ".htm"}
 CFG_EXT = {".cfg"}
 # Loader code that turns an innocent-looking file name into a confirmed dropper.
@@ -184,7 +186,7 @@ LINE_RULES = [
      "SetHttpHandler is public on :30120/<resource>/: require a token (set convar), path whitelist, body cap and rate limit."),
     ("statebag-handler-no-replicated", "medium", "server",
      r"AddStateBagChangeHandler\s*\([^,]+,[^,]+,\s*function\s*\(\s*[\w.]*(\s*,\s*[\w.]+){0,3}\s*\)",
-     "Server state bag handler declares < 5 params, so it ignores `replicated`: client-written values may be acted on."),
+     "Review this server state-bag consumer against server-owned state. `replicated` is replication intent, not authenticated authorship; adding the parameter does not secure it."),
     ("lzstring-utf16", "medium", "any", r"\bdecompressFromUTF16\s*\(",
      "LZString.decompressFromUTF16: legit in some bundles but a Blum JScrambler dropper marker; read the surrounding code."),
 ]
@@ -212,9 +214,13 @@ def side_for(rel: str) -> str:
 
 
 def iter_files(root: Path):
-    for f in root.rglob("*"):
-        if f.is_file() and not (set(f.parts) & SKIP_DIRS) and f.suffix.lower() in CODE_EXT:
+    for f in walk_files(root):
+        if f.suffix.lower() in CODE_EXT:
             yield f
+
+
+def relative_name(path, root):
+    return path.name if root.is_file() else str(path.relative_to(root))
 
 
 def _block(lines: list[str], i: int) -> list[str]:
@@ -291,9 +297,8 @@ CFG_RULES = [
 
 def scan_cfg(root: Path, out: list[Finding]):
     """server.cfg-style files: secrets in replicated/public convars, weak OneSync security settings."""
-    files = [root] if root.is_file() else root.rglob("*")
-    for f in files:
-        if not (f.is_file() and f.suffix.lower() in CFG_EXT) or (set(f.parts) & SKIP_DIRS):
+    for f in walk_files(root):
+        if f.suffix.lower() not in CFG_EXT:
             continue
         rel = f.name if root.is_file() else str(f.relative_to(root))
         for ln, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
@@ -305,13 +310,13 @@ def scan_cfg(root: Path, out: list[Finding]):
 
 def scan_dropper_names(root: Path, out: list[Finding]):
     """Dropper file names: medium on name alone, critical with loader code; stock yarn/webpack builders are fine."""
-    for f in root.rglob("*.js"):
-        if not f.is_file() or (set(f.parts) & SKIP_DIRS):
+    for f in walk_files(root):
+        if f.suffix.lower() != '.js':
             continue
         name = f.name.lower()
         if name not in DROPPER_NAMES and name not in STOCK_BUILDERS:
             continue
-        rel = str(f.relative_to(root))
+        rel = relative_name(f, root)
         loader = bool(STRICT_LOADER.search(f.read_text(encoding="utf-8", errors="replace")))
         if name in STOCK_BUILDERS:
             if f.parent.name.lower() != STOCK_BUILDERS[name] or loader or f.stat().st_size > 20_000:
@@ -324,8 +329,8 @@ def scan_dropper_names(root: Path, out: list[Finding]):
 
 def scan_package_json(root: Path, out: list[Finding]):
     """npm install-time scripts and non-registry dependencies in NUI/server JS builds."""
-    for f in root.rglob("package.json"):
-        if set(f.parts) & SKIP_DIRS:
+    for f in walk_files(root):
+        if f.name != 'package.json':
             continue
         try:
             data = json.loads(f.read_text(encoding="utf-8", errors="replace"))
@@ -333,7 +338,7 @@ def scan_package_json(root: Path, out: list[Finding]):
             continue
         if not isinstance(data, dict):
             continue
-        rel = str(f.relative_to(root))
+        rel = relative_name(f, root)
         scripts = data.get("scripts") if isinstance(data.get("scripts"), dict) else {}
         for hook in ("preinstall", "install", "postinstall", "prepare"):
             if hook in scripts:
@@ -350,25 +355,35 @@ def scan_package_json(root: Path, out: list[Finding]):
 def audit(root: Path) -> list[Finding]:
     findings: list[Finding] = []
     compiled = [(rid, sev, side, re.compile(rx, re.I if rid.startswith("client-") else 0), msg) for rid, sev, side, rx, msg in LINE_RULES]
-    manifests = list(root.rglob("fxmanifest.lua")) + list(root.rglob("__resource.lua"))
-    manifests = [m for m in manifests if not (set(m.parts) & SKIP_DIRS)]
+    manifests = [f for f in walk_files(root) if f.name in ('fxmanifest.lua', '__resource.lua')]
     for mf in manifests:
         text = mf.read_text(encoding="utf-8", errors="replace")
-        rel = str(mf.relative_to(root))
+        rel = relative_name(mf, root)
         for rid, sev, rx, msg in MANIFEST_RULES:
             if re.search(rx, text, re.M):
                 findings.append(Finding(sev, rid, rel, 1, msg, ""))
         if mf.name == "__resource.lua":
             findings.append(Finding("high", "manifest-legacy", rel, 1, "__resource.lua is deprecated: use fxmanifest.lua.", ""))
     scan_cfg(root, findings)
-    if root.is_dir():
-        scan_dropper_names(root, findings)
-        scan_package_json(root, findings)
+    scan_dropper_names(root, findings)
+    scan_package_json(root, findings)
+    side_maps = {}
     for f in iter_files(root):
         if f.name in ("fxmanifest.lua", "__resource.lua"):
             continue
-        rel = str(f.relative_to(root))
+        rel = relative_name(f, root)
         side = side_for(rel)
+        mf = nearest_manifest(f)
+        if mf and mf not in side_maps:
+            try:
+                side_maps[mf] = script_sides(mf)
+            except (ManifestError, OSError, UnicodeError, ValueError) as exc:
+                side_maps[mf] = {}
+                findings.append(Finding('medium', 'manifest-unresolved', str(mf), 1,
+                                        f'Runtime sides could not be resolved: {exc}; run manifest.py and review manually.', ''))
+        declared = side_maps.get(mf, {}).get(f.resolve())
+        if declared:
+            side = next(iter(declared)) if len(declared) == 1 else 'shared'
         text = f.read_text(encoding="utf-8", errors="replace")
         handles_net = bool(re.search(r"RegisterNetEvent|lib\.callback\.register|RegisterServerCallback|CreateCallback|onNet\(", text))
         for ln, line in enumerate(text.splitlines(), 1):
@@ -385,8 +400,8 @@ def audit(root: Path) -> list[Finding]:
                 if rx.search(code):
                     findings.append(Finding(sev, rid, rel, ln, msg, line.strip()[:160]))
         if f.suffix.lower() not in (".html", ".htm") and len(max(text.splitlines() or [""], key=len)) > 3000:
-            findings.append(Finding("high", "minified-or-obfuscated", rel, 1,
-                                    "Very long single line: minified/obfuscated code. Unreviewable in a resource.", ""))
+            findings.append(Finding("medium", "minified-or-obfuscated", rel, 1,
+                                    "Very long line: may be a normal production bundle. Review source/build provenance; length alone does not establish malware.", ""))
         if f.suffix == ".lua":
             scan_wait_loops(text, rel, findings)
             if side in ("server", "shared"):
@@ -406,7 +421,12 @@ def main() -> int:
     if not root.exists():
         print(f"not found: {root}", file=sys.stderr)
         return 2
-    res = [f for f in audit(root) if SEV[f.severity] >= SEV[a.min]]
+    supported = [f for f in walk_files(root) if f.suffix.lower() in CODE_EXT | CFG_EXT or f.name == 'package.json']
+    if not supported:
+        print(f"no supported files to audit: {root}", file=sys.stderr)
+        return 2
+    all_findings = audit(root)
+    res = [f for f in all_findings if SEV[f.severity] >= SEV[a.min]]
     res.sort(key=lambda f: (-SEV[f.severity], f.file, f.line))
     if a.json:
         print(json.dumps([asdict(f) for f in res], indent=2))
@@ -415,7 +435,9 @@ def main() -> int:
             print(f"[{f.severity.upper():8}] {f.rule:34} {f.file}:{f.line}\n           {f.message}\n           > {f.snippet}")
         counts = {s: sum(1 for f in res if f.severity == s) for s in SEV}
         print(f"\nSummary: {counts}  (heuristic: confirm each finding manually)")
-    return 1 if any(SEV[f.severity] >= 2 for f in res) else 0
+    print(f"-- scanned {len(supported)} supported file(s); excluded .git/node_modules/__pycache__; "
+          f"{len(all_findings) - len(res)} finding(s) hidden by --min; heuristic review only", file=sys.stderr)
+    return 1 if any(SEV[f.severity] >= 2 for f in all_findings) else 0
 
 
 if __name__ == "__main__":

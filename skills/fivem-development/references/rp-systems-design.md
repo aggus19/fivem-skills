@@ -195,41 +195,13 @@ CREATE TABLE IF NOT EXISTS `bank_ledger` (
 ## 7. Shops and crafting
 - Shops: prefer `exports.ox_inventory:RegisterShop` (server-side prices, groups/job locks, locations). Custom shops follow §1 template with prices from `ServerConfig`.
 - Stock (optional): `shop_stock(shop_id, item, stock)`; decrement with `UPDATE ... SET stock = stock - ? WHERE shop_id = ? AND item = ? AND stock >= ?`.
-- Crafting:
-```lua
--- server/crafting.lua
-local Recipes = {   -- server-only config
-    lockpick = { inputs = { metalscrap = 3, plastic = 1 }, time = 5000, bench = 'workbench_1', count = 1 },
-}
-local busy = {}
-
-lib.callback.register('craft:server:make', function(source, recipeId)
-    local src = source
-    local recipe = Recipes[recipeId]
-    if not recipe or busy[src] then return false end
-    local bench = ServerConfig.Benches[recipe.bench]
-    if #(GetEntityCoords(GetPlayerPed(src)) - bench) > 3.0 then return false end
-    for item, n in pairs(recipe.inputs) do
-        if exports.ox_inventory:GetItemCount(src, item) < n then return false, 'missing_items' end
-    end
-    if not exports.ox_inventory:CanCarryItem(src, recipeId, recipe.count) then return false, 'cannot_carry' end
-    busy[src] = true
-    local charId = Bridge.GetIdentifier(src)
-    for item, n in pairs(recipe.inputs) do exports.ox_inventory:RemoveItem(src, item, n) end
-    SetTimeout(recipe.time, function()
-        busy[src] = nil
-        -- player may have left (and on Enhanced the id may already belong to someone else)
-        if not DoesPlayerExist(src) or Bridge.GetIdentifier(src) ~= charId then
-            lib.logger(src, 'craft_lost', ('%s lost %s craft (left)'):format(charId, recipeId))
-            return
-        end
-        exports.ox_inventory:AddItem(src, recipeId, recipe.count)
-    end)
-    return true, recipe.time                                   -- client shows a progress bar of this duration
-end)
-AddEventHandler('playerDropped', function() busy[source] = nil end)
-```
-  The client progress bar is cosmetic; the server's timer decides. Cancel support: let the client request cancel → server refunds only if the timer hasn't fired.
+- Crafting: prefer the installed inventory's built-in crafting workflow after checking its version, hooks and failure behavior. A sequence of `RemoveItem` and `AddItem` exports is not an atomic exchange.
+- For custom timed crafting, define these states explicitly: `PENDING` (timer, no consumed materials), `COMMITTING`, `DONE`, `CANCELLED`, `RECONCILE` (unknown/partial result). The server owns duration, recipe and station. The client's progress bar is cosmetic.
+- Bind the operation to a persistent character ID **and** a session generation/token. Timer callbacks must match the exact current operation before clearing a lock or changing inventory. A reused `source` or a late callback from an earlier character cannot complete a new character's operation.
+- At completion re-check session, station/bucket, permissions, inputs and output capacity. Use an inventory-owned atomic exchange if it actually exists in the installed API. Otherwise design explicit reservation/compensation and durable recovery before implementing multi-item recipes. Do not invent an `atomicCraft` export.
+- Check every removal, grant and compensation result. `CanCarryItem` is a pre-check, not a reservation. An exception/timeout after a mutation is ambiguous: reconcile; do not blindly repeat the grant or refund.
+- Cancellation is allowed while `PENDING`. Once committing, settle or reconcile the existing operation. Persist reservations/operation results if recovery across resource/server restart is required. A log message about lost ingredients is not compensation.
+- Acceptance cases: missing second ingredient, capacity lost during the timer, AddItem failure/exception, disconnect, character switch, reused source, cancel racing completion, duplicate completion, dependency restart. See [design-and-validation.md](design-and-validation.md).
 
 ## 8. Drugs and illegal activities
 - Gate on `GlobalState.policeOnDuty >= Config.MinPolice` **server-side** (the client check is UX only).
@@ -287,7 +259,7 @@ RegisterNetEvent('ems:client:revive', function()
     ClearPedBloodDamage(ped)
 end)
 ```
-- `RegisterNetEvent` on the client accepts events only from the server; a cheater can still run local code to revive himself, so the server-side `isDead` state (not client health) decides loot, respawn fees and "dead" restrictions.
+- `RegisterNetEvent` on the client also allows same-context triggers (Cfx security docs); a cheater can still run local code to revive himself, so the server-side `isDead` state (not client health) decides loot, respawn fees and "dead" restrictions.
 - Respawn at hospital: server checks bleed-out time elapsed, charges fee, clears `isDead`, teleports server-side, and (configurable) removes items server-side.
 - Avoid `baseevents` death events as authority: they are client-triggered net events.
 

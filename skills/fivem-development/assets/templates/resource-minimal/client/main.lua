@@ -1,0 +1,3 @@
+-- Client presentation for {{RESOURCE_NAME}}.
+-- Add only the events, commands or frame work the requested feature needs.
+-- Send intent to the server; authorization and persistent mutations belong there.

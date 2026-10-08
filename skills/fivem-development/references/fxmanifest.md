@@ -44,7 +44,7 @@ ui_page 'web/dist/index.html'
 files {
     'web/dist/**/*',
     'locales/*.json',
-    'bridge/**/*.lua',      -- Lua loaded at runtime with require/lib.load must be listed for the client
+    'bridge/client/*.lua',  -- only client adapters loaded at runtime; never publish bridge/server
 }
 
 dependencies {

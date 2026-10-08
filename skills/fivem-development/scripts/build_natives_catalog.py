@@ -254,12 +254,14 @@ def main() -> int:
     for stem in sorted(pages, key=lambda s: (s.startswith("CFX"), s)):
         side, items, blurb = pages[stem]
         fname = f"{stem}.md"
-        (out_dir / fname).write_text(build_page(stem, side, items, fetched, blurb), encoding="utf-8", newline="\n")
+        with (out_dir / fname).open('w', encoding='utf-8', newline='\n') as target:
+            target.write(build_page(stem, side, items, fetched, blurb))
         un = sum(1 for n in items if not n.get("name"))
         rows.append((fname, side, len(items), un))
         total += len(items)
         unnamed_total += un
-    (out_dir / "README.md").write_text(build_readme(rows, fetched, total, unnamed_total), encoding="utf-8", newline="\n")
+    with (out_dir / 'README.md').open('w', encoding='utf-8', newline='\n') as target:
+        target.write(build_readme(rows, fetched, total, unnamed_total))
     print(f"wrote {len(rows)} namespace files + README.md ({total} natives, {unnamed_total} unnamed) -> {out_dir}")
     return 0
 

@@ -77,7 +77,7 @@ Enhanced-only dev tools: `cl_drawResTimeGraphs`, `cl_drawResTimeWarnings`, `con_
 1. Reproduce the lag (stand where it happens / trigger the feature).
 2. `profiler record 500` (≈ 500 frames; client F8 or server console). `profiler status` shows progress.
 3. `profiler view` (client opens Chrome; server prints a link) — or `profiler saveJSON name.json` and load it in Chrome DevTools → Performance → Load profile.
-4. Look for resource ticks (`myres: tick`) and event handlers taking > 1 ms; fix the loop, then re-measure. Combine with `resmon` for steady-state cost (target idle ≈ 0.00–0.02 ms). See `performance.md`.
+4. Correlate expensive slices with the symptom and input/workload, then re-measure. Combine with client `resmon` where appropriate; choose a contextual budget rather than a universal per-resource cutoff. For server hitches, use [hitch-diagnostics.md](hitch-diagnostics.md).
 
 ## 6. Error messages → causes
 | Message (exact where quoted) | Side | Likely cause / fix |
@@ -99,7 +99,7 @@ Enhanced-only dev tools: `cl_drawResTimeGraphs`, `cl_drawResTimeWarnings`, `con_
 | `Could not find dependency xxx for resource yyy.` | server | `dependency`/`dependencies` names a resource not present/startable |
 | `Couldn't find resource xxx.` / `Couldn't start resource xxx.` | server | folder name ≠ ensure name, manifest syntax error, dependency failed (scroll up for the first error) |
 | `Started resource xxx (N warnings)` | server | manifest/asset warnings: read them (oversized assets, missing files) |
-| `server thread hitch warning: timer interval of N milliseconds` | server | main thread blocked > 150 ms: heavy sync loops, sync file I/O, `.await` storms, huge JSON; also `network thread …` / `sync thread …` (> 100 ms) variants. Profile (§5); host CPU steal also causes it |
+| `server thread hitch warning: timer interval of N milliseconds` | server | Delayed timer interval, not proof of one blocking query. Reviewed Legacy thresholds: main/network > 150 ms, sync > 100 ms; check deployed edition/artifact. Correlate profiles, work queues and host scheduling using `hitch-diagnostics.md` |
 | `Reliable network event overflow.` (drop reason) | server→client | the client sent more net events than the rate limiter allows (`netEvent` default 50/s, burst 200; flood limiter 75/300) → loops calling `TriggerServerEvent`; batch/throttle |
 | `Reliable network event size overflow: <event>` | server→client | > 128 KiB/s (burst 384 KiB) of event payload → send less / use latent events; convars `rateLimiter_netEventSize_rate` / `_burst` |
 | `Unreliable network event overflow.` | server→client | latent event rate limit |

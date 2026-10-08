@@ -2,7 +2,7 @@
 
 Baseline: qbx_core 1.24.0 · es_extended 1.15.2 · qb-core (2026-05 refactor) · ox_inventory 2.48.0 — verified 2026-10-07.
 
-Goal: one resource that runs on **Qbox, QBCore, ESX, ox_core or standalone** without framework calls scattered through the code. The template in `assets/templates/resource-lua/bridge/` implements this pattern.
+Use a bridge when multi-framework distribution is required. Keep framework calls behind verified adapters for the intended stacks; a project-specific resource may simply use its installed owner. The optional `ox-shop` template in `assets/templates/resource-lua/bridge/` demonstrates Qbox, QBCore, ESX and standalone adapters; it does not implement every framework listed in this reference. Verify each installed contract before use.
 
 ## Contents
 1. Detecting the framework

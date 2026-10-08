@@ -170,7 +170,7 @@ Baseline: FXServer Legacy 35245 / Latest 37150, game build 3889, CfxLua 5.4, Nod
 ## 12. Performance patterns
 | AVOID | USE | Why |
 |---|---|---|
-| distance loops for markers/interactions | ox_target, `lib.points`, `lib.zones` | idle 0.00–0.02 ms target |
+| distance loops for markers/interactions | ox_target, `lib.points`, `lib.zones` | measure total interaction-library work; preserve necessary per-frame behavior |
 | `GetGamePool` scans every frame | throttled scans, `lib.getClosest*` | O(n) per frame |
 | per-frame table/closure allocation | reuse with `table.wipe`, preallocate `table.create` | GC spikes |
 | heavy sync work on svMain (50 ms tick) | async, chunked, staggered ≥ 1000 ms jobs | server hitches |

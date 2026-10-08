@@ -10,6 +10,7 @@ interface OpenPayload {
 export default function App() {
   const [visible, setVisible] = useState(isEnvBrowser());
   const [title, setTitle] = useState('Dev preview');
+  const [error, setError] = useState('');
 
   // Lua: SendNUIMessage({ action = 'open', data = { title = '...' } })
   useNuiEvent<OpenPayload>('open', (data) => {
@@ -18,37 +19,48 @@ export default function App() {
   });
   useNuiEvent('close', () => setVisible(false));
 
+  useEffect(() => {
+    void fetchNui('ready').catch(() => setError('Unable to connect. Try reopening the interface.'));
+  }, []);
+
+  const close = () => {
+    void fetchNui('close').then(() => setVisible(false))
+      .catch(() => setError('Unable to close. Please try again.'));
+  };
+
   // Escape closes the UI and tells Lua to release focus.
   useEffect(() => {
     if (!visible) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setVisible(false);
-        void fetchNui('close');
+        void fetchNui('close').then(() => setVisible(false))
+          .catch(() => setError('Unable to close. Please try again.'));
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [visible]);
 
-  if (!visible) return null; // render nothing while hidden: no idle CEF cost
+  if (!visible) return null; // avoids rendering the panel; the CEF instance still exists
 
   return (
     <main className="panel">
       <h1>{title}</h1>
+      {error && <p role="alert">{error}</p>}
       <button
         onClick={async () => {
-          const res = await fetchNui<{ ok: boolean }>('action', { kind: 'example' }, { ok: true });
-          console.log('server answered', res);
+          try {
+            const res = await fetchNui<{ ok: boolean }>('action', { kind: 'example' }, { ok: true });
+            setError(res.ok ? '' : 'Action could not be completed.');
+          } catch {
+            setError('Unable to complete the action. Please try again.');
+          }
         }}
       >
         Do action
       </button>
       <button
-        onClick={() => {
-          setVisible(false);
-          void fetchNui('close');
-        }}
+        onClick={close}
       >
         Close
       </button>

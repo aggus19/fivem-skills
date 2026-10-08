@@ -20,39 +20,16 @@ import re
 import sys
 from pathlib import Path
 
-LIST_DIRECTIVES = {
-    "client_script": "client", "client_scripts": "client",
-    "server_script": "server", "server_scripts": "server",
-    "shared_script": "shared", "shared_scripts": "shared",
-    "file": "files", "files": "files",
-}
+# Also works with python -I; imports only this script's installed sibling helper.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from resource_files import LIST_DIRECTIVES, ManifestError, glob_match, parse_manifest
+
 DEP_DIRECTIVES = {"dependency", "dependencies"}
 # '@resource/...' imports that are commonly used without a `dependency` line; still recommended.
 COMMON_IMPORTS = {"ox_lib", "oxmysql", "es_extended", "qbx_core", "qb-core", "ox_core"}
 
-STR = r"""(?:'([^']*)'|"([^"]*)"|\[\[(.*?)\]\])"""
-
-
-def strings(chunk: str) -> list[str]:
-    return [a or b or c for a, b, c in re.findall(STR, chunk, re.S)]
-
-
 def parse(text: str) -> dict[str, list[str]]:
-    text = re.sub(r"--\[\[.*?\]\]", "", text, flags=re.S)
-    text = "\n".join(l.split("--", 1)[0] for l in text.splitlines())
-    out: dict[str, list[str]] = {}
-    for m in re.finditer(r"\b([a-z_0-9]+)\s*(\{[^}]*\}|\(\s*\{[^}]*\}\s*\)|" + STR + r")", text, re.S):
-        key = m.group(1)
-        out.setdefault(key, []).extend(strings(m.group(2)))
-    return out
-
-
-def glob_match(root: Path, pattern: str) -> list[Path]:
-    pattern = pattern.replace("\\", "/")
-    if any(ch in pattern for ch in "*?["):
-        return [p for p in root.glob(pattern) if p.is_file()]
-    p = root / pattern
-    return [p] if p.is_file() else []
+    return parse_manifest(text)
 
 
 def check(res: Path) -> tuple[list[str], list[str]]:
@@ -62,7 +39,10 @@ def check(res: Path) -> tuple[list[str], list[str]]:
         if (res / "__resource.lua").exists():
             return ["__resource.lua is deprecated; create fxmanifest.lua (fx_version 'cerulean')"], []
         return [f"no fxmanifest.lua in {res}"], []
-    d = parse(mf.read_text(encoding="utf-8", errors="replace"))
+    try:
+        d = parse(mf.read_text(encoding="utf-8-sig"))
+    except (ManifestError, OSError, UnicodeError) as exc:
+        return [f"cannot statically validate manifest: {exc}"], []
 
     fx = (d.get("fx_version") or [""])[0]
     if not fx:
@@ -88,6 +68,19 @@ def check(res: Path) -> tuple[list[str], list[str]]:
         deps.update(x.split("/")[0] for x in d.get(k, []))
 
     seen = {}
+    resolved = {}
+    for key in LIST_DIRECTIVES:
+        for entry in d.get(key, []):
+            if entry.startswith('@'):
+                continue
+            try:
+                resolved[entry] = glob_match(res, entry)
+            except (ManifestError, ValueError, OSError) as exc:
+                errors.append(f"{key}: {exc}")
+                resolved[entry] = []
+    server_paths = {p.resolve() for key in ('server_script', 'server_scripts')
+                    for entry in d.get(key, []) for p in resolved.get(entry, [])}
+    server_only = (d.get('server_only') or [''])[0].lower() in ('yes', 'true', '1')
     for key, kind in LIST_DIRECTIVES.items():
         for entry in d.get(key, []):
             if entry in seen and seen[entry] == kind:
@@ -101,28 +94,33 @@ def check(res: Path) -> tuple[list[str], list[str]]:
                 if dep in ("mysql-async", "ghmattimysql"):
                     errors.append(f"'{entry}': deprecated DB wrapper, use '@oxmysql/lib/MySQL.lua'")
                 continue
-            matches = glob_match(res, entry)
+            matches = resolved.get(entry, [])
             if not matches:
                 errors.append(f"{kind}: '{entry}' matches no file")
                 continue
-            low = entry.lower()
-            if kind == "client" and re.search(r"(^|/)(server|sv)(/|_)|sv_|server\.lua$", low):
-                errors.append(f"client script '{entry}' looks server-only: server code would be sent to every client")
-            if kind == "server" and re.search(r"(^|/)(client|cl)(/|_)|cl_|client\.lua$", low):
-                warns.append(f"server script '{entry}' looks client-side")
-            if kind == "shared" and re.search(r"(^|/)(server|sv)(/|_)", low):
-                errors.append(f"shared script '{entry}' looks server-only: it is also sent to clients")
+            for path in matches:
+                rel = path.relative_to(res.resolve()).as_posix()
+                low = rel.lower()
+                server_name = re.search(r"(^|/)(server|sv)([/_.]|$)|(^|/)sv_|_server\.\w+$", low)
+                if not server_only and kind in ('client', 'shared', 'files') and (server_name or path.resolve() in server_paths):
+                    errors.append(f"{kind}: '{entry}' exposes server file '{rel}' to clients; review download contents")
+                if kind == 'server' and re.search(r"(^|/)(client|cl)([/_.]|$)|(^|/)cl_", low):
+                    warns.append(f"server script '{rel}' looks client-side")
 
     ui = (d.get("ui_page") or [None])[0]
     if ui:
         if ui.startswith(("http://", "https://")):
             warns.append(f"ui_page is a remote URL ({ui}); fine for dev servers, ship built files for production")
         else:
-            if not (res / ui).is_file():
-                errors.append(f"ui_page '{ui}' does not exist (did you build the NUI? e.g. `npm run build`)")
+            try:
+                pages = glob_match(res, ui)
+            except (ManifestError, ValueError, OSError) as exc:
+                return errors + [f"ui_page: {exc}"], warns
+            if len(pages) != 1:
+                errors.append(f"ui_page '{ui}' does not exist or is ambiguous (build the NUI with the project's package manager)")
                 return errors, warns
             file_entries = d.get("file", []) + d.get("files", [])
-            covered = any((res / ui).resolve() in [p.resolve() for p in glob_match(res, f)] for f in file_entries)
+            covered = any(pages[0].resolve() in [p.resolve() for p in resolved.get(f, [])] for f in file_entries)
             if not covered:
                 errors.append(f"ui_page '{ui}' is not covered by `files {{ ... }}`: the client will get a blank NUI")
     return errors, warns

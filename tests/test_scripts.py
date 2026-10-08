@@ -163,6 +163,11 @@ class SkillStructureTests(unittest.TestCase):
         self.assertLessEqual(len(desc) - len("description: "), 1024)
         self.assertLess(len(text.splitlines()), 500)
         import re
+        fields = set(re.findall(r'^([a-z-]+):', text.split('---', 2)[1], re.M))
+        self.assertTrue({'name', 'description'} <= fields)
+        self.assertFalse(fields - {'name', 'description', 'license', 'compatibility', 'metadata'})
+        compatibility = next(line for line in text.splitlines() if line.startswith('compatibility:'))
+        self.assertLessEqual(len(compatibility) - len('compatibility: '), 500)
         for link in re.findall(r"\]\((references/[^)#]+)", text):
             self.assertTrue((skill.parent / link).exists(), link)
 

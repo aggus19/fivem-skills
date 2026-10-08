@@ -123,23 +123,9 @@ EndTextCommandSetBlipName(blip)
 4. Server: five checks (`security.md`): who, allowed, where (distance to the configured location), what (whitelist/clamp), how often → remove → add → log.
 5. Client updates UI from the server response.
 
-```lua
--- server
-lib.callback.register('myres:server:buy', function(source, shopId, item, count)
-    local src = source
-    local shop = ServerConfig.Shops[shopId]
-    if not shop or type(item) ~= 'string' or type(count) ~= 'number' then return false end
-    count = math.floor(count)
-    if count < 1 or count > 50 then return false end
-    local price = shop.items[item]
-    if not price then return false end
-    if #(GetEntityCoords(GetPlayerPed(src)) - shop.coords) > 5.0 then return false end
-    if not exports.ox_inventory:CanCarryItem(src, item, count) then return false, 'cannot_carry' end
-    if not Bridge.RemoveMoney(src, 'cash', price * count, 'shop:' .. shopId) then return false, 'no_money' end
-    exports.ox_inventory:AddItem(src, item, count)
-    return true
-end)
-```
+Use the checked compensation example in `assets/templates/resource-lua/server/purchase.lua` through the template's server handler. It distinguishes a definitive failed grant (attempt one checked refund) from an unknown result (reconcile, never blindly refund/regrant). This is an integration example; the shop stays disabled until the project's durable operation/recovery service and adapter contracts are wired. Prefer inventory-owned shop functionality where it meets the feature's requirements.
+
+See [design-and-validation.md](design-and-validation.md) for session identity, cross-resource atomicity and failure acceptance cases.
 
 ## 6. Weather and time sync
 - Weather/time are **client-side** game state; a server resource must publish the authoritative value and every client applies it.
@@ -164,7 +150,7 @@ AddStateBagChangeHandler('weather', 'global', function(_, _, value) applyWeather
 
 ## 8. Population density
 - Per-frame client natives: `SetPedDensityMultiplierThisFrame`, `SetScenarioPedDensityMultiplierThisFrame(interior, exterior)`, `SetVehicleDensityMultiplierThisFrame`, `SetRandomVehicleDensityMultiplierThisFrame`, `SetParkedVehicleDensityMultiplierThisFrame` — each must be called every frame (`Wait(0)` loop), so keep one central resource (e.g. `qbx_density`) instead of several.
-- Server-side alternatives: `populationPedCreating` event to cancel/replace spawns; `SetRoutingBucketPopulationEnabled` per bucket.
+- Client-side hook: `populationPedCreating` can cancel/replace population ped spawns. Server-side: `SetRoutingBucketPopulationEnabled` controls population per bucket.
 
 ## 9. Job flow template (e.g. delivery job)
 - Server keeps `activeJobs[src] = { startedAt, route, stage, vehicleNetId }`.

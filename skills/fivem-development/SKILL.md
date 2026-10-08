@@ -2,7 +2,7 @@
 name: fivem-development
 description: Builds, reviews, debugs, optimizes and secures FiveM (Cfx.re / GTA V) resources and servers — CfxLua 5.4, JS/TS and C# scripts, fxmanifest.lua, all natives, events and callbacks, OneSync entities and state bags, NUI (React/Vite), oxmysql and database tuning, ox_lib, ox_inventory, ox_target, ox_core, Qbox, QBCore, ESX Legacy, ND, vRP, server.cfg, convars, txAdmin, artifacts, GTA V Enhanced, vehicles/handling, MLO/streaming, RP systems design, anticheat and resource audits (backdoors, exploits, dupes). Use when the user mentions FiveM, FXServer, Cfx, CitizenFX, GTA RP/roleplay servers, a framework or ox resource above, a .lua resource with fxmanifest, or asks to create, convert, optimize, scale or audit a FiveM script or server — including requests in Spanish or Portuguese.
 license: MIT
-compatibility: Scripts need Python 3.8+ (standard library only); natives.py / build_natives_catalog.py need internet on first run. NUI template needs Node 22+.
+compatibility: Scripts need Python 3.8+ (standard library only); native lookup needs internet on first run. NUI builds with Bun 1.4.2 or compatible Node/npm; see its package.json.
 metadata:
   author: fivem-skills
   version: "1.2.0"
@@ -16,12 +16,12 @@ FXServer Legacy Recommended **35245** / Latest 37150 (clients can't join older b
 
 ## Non-negotiable rules
 
-1. **Server is the authority.** Every net event, callback and export that changes state validates on the server: who (`local src = source` first), allowed (job/ACE/ownership), where (distance), what (types, ranges, whitelists, server-side prices), how often (cooldown). No yield/`Wait` between the check and the mutations; take/verify first, grant after, and refund or abort atomically on failure. → [security.md](references/security.md)
-2. **Never invent natives, exports or framework APIs.** Verify natives with `python scripts/natives.py show <Name>` (or the catalogue in `assets/natives/`). If a framework function is not in the references, say so and link its docs instead of guessing.
-3. **Detect the stack first.** Read `fxmanifest.lua`, `server.cfg`, `resources/` (or ask): framework, inventory, target, Legacy vs Enhanced, DB engine. Match it; don't mix frameworks. Portable code → bridge pattern ([framework-bridge.md](references/framework-bridge.md)).
-4. **Use current APIs, never deprecated ones.** Check [use-vs-avoid.md](references/use-vs-avoid.md) whenever choosing an API, library or pattern. oxmysql placeholders only; ox_* from `overextended/*`; `RegisterNetEvent`; server-side entity creation; no secrets in client/shared files or `setr`.
-5. **Performance budget.** Idle resource ≈ 0.00–0.02 ms in `resmon`; no `while true` without `Wait`; `Wait(0)` only while drawing/reading input; events/state bags/ox_lib points/zones/ox_target over polling. → [performance.md](references/performance.md)
-6. **Be honest about versions and uncertainty.** Quote the baseline date when versions matter; keep **UNVERIFIED** markers from the references visible to the user instead of presenting them as fact.
+1. **Server is the authority.** Validate who (`local src = source` first), permission/ownership, location/bucket, bounded input/server prices and rate. Identify the data owner and possible yields, including inside exports; check mutation and compensation results. Unknown outcomes require reconciliation, not blind retries. → [security.md](references/security.md), [design-and-validation.md](references/design-and-validation.md)
+2. **Never invent natives, exports or framework APIs.** Verify natives with `python scripts/natives.py show <Name>` (or the catalogue). For an API absent from the references, inspect installed source and matching official docs; state unresolved contracts instead of guessing. Distinguish application-defined interfaces from framework exports.
+3. **Adapt to the project and request.** Read the relevant manifests, configuration and installed APIs; distinguish present, configured and running resources. Preserve language, framework, data owners and package manager; add only needed dependencies. Resolve helpers relative to this skill's location. → [project-adaptation.md](references/project-adaptation.md); portable code → [framework-bridge.md](references/framework-bridge.md).
+4. **Choose APIs compatible with the installed stack.** Use [use-vs-avoid.md](references/use-vs-avoid.md) and matching source/docs; preserve an older supported API when compatibility requires it and explain the constraint. Do not silently migrate frameworks. SQL placeholders; server-owned entity lifecycle; no secrets in any client-downloadable file or `setr`.
+5. **Measure performance with a correctness budget.** Establish workload and before/after measurements, including shared-library, NUI, network and DB costs. Numerical targets are contextual; a rounded `0.00 ms` is not zero cost. Bound loops and use per-frame work only for actual per-frame requirements. → [performance.md](references/performance.md), [design-and-validation.md](references/design-and-validation.md)
+6. **Separate evidence levels.** Distinguish documented, source-reviewed, logic-tested, integration-tested and measured claims. Quote baseline date when versions matter; keep **UNVERIFIED** markers visible. Never turn missing runtime tests into a production-readiness or speedup claim.
 7. **Respect the platform license.** No real-money gambling, loot boxes, currency sales, non-Tebex payments, escrow bypass or leaked resources. → [licensing-and-policy.md](references/licensing-and-policy.md)
 
 ## Choose the reference (read only what the task needs)
@@ -30,6 +30,7 @@ FXServer Legacy Recommended **35245** / Latest 37150 (clients can't join older b
 | Task | Read |
 |---|---|
 | Versions, deprecations, breaking changes | [versions.md](references/versions.md) |
+| First contact, custom/mixed stack, dependency choice, scope and installed-skill paths | [project-adaptation.md](references/project-adaptation.md) |
 | server.cfg, install (Windows/Linux), updates, ACE, artifacts | [server-ops.md](references/server-ops.md) |
 | Any convar or server command (defaults, recommended values, removed ones) | [convars-and-commands.md](references/convars-and-commands.md) |
 | txAdmin (recipes, events, env vars, permissions, restarts, whitelist) | [txadmin.md](references/txadmin.md) |
@@ -42,6 +43,7 @@ FXServer Legacy Recommended **35245** / Latest 37150 (clients can't join older b
 |---|---|
 | New resource / manifest directives / data_file types | [fxmanifest.md](references/fxmanifest.md) |
 | Resource architecture, packaging, release workflow, pre-release gate | [resource-architecture-and-release.md](references/resource-architecture-and-release.md) |
+| Stateful/async feature design, identity, failure handling, evidence and performance experiments | [design-and-validation.md](references/design-and-validation.md) |
 | CfxLua syntax & extensions, threads, exports, JS/TS, C# | [runtimes.md](references/runtimes.md) |
 | Events (all built-in), callbacks, commands, keybinds, rate limits | [events-and-callbacks.md](references/events-and-callbacks.md) |
 | Natives guide, client vs server, identifiers, pitfalls | [natives.md](references/natives.md) |
@@ -92,9 +94,11 @@ FXServer Legacy Recommended **35245** / Latest 37150 (clients can't join older b
 |---|---|
 | What to use vs avoid (APIs, libs, patterns, resources) | [use-vs-avoid.md](references/use-vs-avoid.md) |
 | Secure coding, exploit classes, server.cfg hardening | [security.md](references/security.md) |
+| Trigger/callback/export/command security, money/items, replay, failure and concurrency tests | [security-validation.md](references/security-validation.md) |
 | Anticheat design (game events, heartbeats, honeypots, bans) | [anticheat.md](references/anticheat.md) |
 | Auditing a resource / "is this safe?" / backdoors | [audit-checklist.md](references/audit-checklist.md) |
 | Performance: measuring, budgets, standard values | [performance.md](references/performance.md) |
+| Hitch warnings, slow actions, DB versus script/host latency, diagnostic experiments | [hitch-diagnostics.md](references/hitch-diagnostics.md) |
 | Before/after optimization recipes | [performance-cookbook.md](references/performance-cookbook.md) |
 | Large servers (200–2048 slots), hardware, network, streaming budgets | [performance-server-scaling.md](references/performance-server-scaling.md) |
 | Monetisation, Tebex, escrow, Marketplace, licenses (PLA 2026-09-10) | [licensing-and-policy.md](references/licensing-and-policy.md) |
@@ -107,46 +111,47 @@ All in `scripts/`, Python 3.8+, standard library only; paths relative to this sk
 |---|---|
 | `python scripts/natives.py search <text> [--side client\|server] [--desc]` | Find natives (official DB incl. old names, cached in `~/.cache/fivem-skill`) |
 | `python scripts/natives.py show <NameOrHash>` | Exact signature(s), side, hash, docs link |
-| `python scripts/natives.py check <path> [--strict]` | Every native used exists and is on the right side (`--strict` flags unknown/hallucinated calls) |
+| `python scripts/natives.py check <path> [--strict]` | Lexical Lua native names and manifest-declared sides; filename fallback/unknown side reported. No signature/control-flow/runtime proof |
 | `python scripts/build_natives_catalog.py [--out DIR] [--refresh]` | Regenerate `assets/natives/` (full catalogue) |
-| `python scripts/manifest.py <resource>` | fxmanifest vs files on disk, NUI coverage, side leaks, obsolete keys |
-| `python scripts/audit.py <path> [--min high] [--json]` | Heuristic security/performance/compat scan incl. backdoor signatures and `.cfg` checks (exit 1 on high/critical) |
+| `python scripts/manifest.py <resource>` | Literal manifest vs resolved files/globs, NUI downloads and server-file exposure; dynamic manifests explicitly unsupported |
+| `python scripts/audit.py <path> [--min high] [--json]` | Heuristic code/config/build-output scan; exit 1 on any high/critical regardless of display filter. Dependencies excluded; findings need review |
 | `python scripts/rcon.py [--host H] [--port P] <command...>` | One RCON command over UDP (password from env `FIVEM_RCON_PASSWORD`, never argv; localhost unless `--allow-remote`) |
 | `python scripts/server_info.py [host:port] [--resource NAME] [--getinfo] [--json]` | Summarise `/info.json`, `/players.json`, `/dynamic.json`; check a resource is started |
-| `python scripts/scaffold.py <name> [--out DIR] [--nui]` | New resource: ox_lib + oxmysql + auto-detecting bridge (Qbox/ESX/QBCore/standalone) + optional React/Vite NUI |
+| `python scripts/scaffold.py <name> [--out DIR] [--nui] [--profile minimal\|ox-shop]` | Default: dependency-free Lua; optional NUI. Explicit ox-shop profile: ox stack + bridge/economy integration example |
 
 ## Workflows
 
 ### Create a resource
 ```
-- [ ] 1. Confirm stack (framework, inventory, target, Legacy/Enhanced) and feature scope
-- [ ] 2. python scripts/scaffold.py <name> --out <resources dir> [--nui]
-- [ ] 3. Design data + events first (rp-systems-design.md for RP features)
-- [ ] 4. Implement: shared config (public), server config (prices/limits), server logic with the 5 checks, client UX via ox_lib
+- [ ] 1. Establish feature scope and relevant installed stack (project-adaptation.md)
+- [ ] 2. Match the project's runtime/layout; optional Lua scaffold: python scripts/scaffold.py <name> --out <resources dir> [--nui] (minimal by default)
+- [ ] 3. Design ownership, identity, events, interleaving, persistence and failures (design-and-validation.md; RP details in rp-systems-design.md)
+- [ ] 4. Implement with the installed APIs/UI; keep private config server-only. For sensitive operations, map all entry points to effects and apply security-validation.md
 - [ ] 5. python scripts/natives.py check <resource> --strict
 - [ ] 6. python scripts/manifest.py <resource>
 - [ ] 7. python scripts/audit.py <resource>  → fix high/critical, justify the rest
-- [ ] 8. Tell the user: install steps, ensure order, convars, SQL, NUI build, how to test in game
+- [ ] 8. Build NUI with the existing package manager/lockfile; test relevant failure paths; run or explicitly mark pending FXServer acceptance
+- [ ] 9. Report install/ensure/convars/SQL, actual checks, evidence and runtime limitations
 ```
-Templates: `assets/templates/resource-lua/` (bridge + secure shop example), `assets/templates/nui-react-vite/` (React 19, Vite 8, TS, `chrome103`). Configs: `assets/configs/` (LuaLS, selene, StyLua, server.cfg, CI).
+Templates: `assets/templates/resource-minimal/` (dependency-free default), `resource-lua/` (explicit ox-shop profile; purchases disabled until durable recovery/contracts are wired), `nui-react-vite/` (optional React/Vite/TS, `chrome103`, Bun lockfile). These are choices, not a required server stack. Tested logic building blocks: `assets/examples/` (versioned progress writes and custom-account transfer body). Configs: `assets/configs/`.
 
 ### Modify or fix existing code
-1. Read the resource (manifest first); identify framework, versions and the side of each file.
+1. Read the resource (manifest first); identify installed API contracts and the side of each file. Follow project-adaptation.md for unknown/custom stacks.
 2. Reproduce from the user's error (first error wins — [debugging.md](references/debugging.md)).
 3. Minimal change in the existing style; don't migrate frameworks unless asked.
 4. Re-run `natives.py check`, `manifest.py`, `audit.py` on the touched resource.
 
 ### Audit a resource
-Follow [audit-checklist.md](references/audit-checklist.md): `audit.py`, `natives.py check --strict`, `manifest.py`, then confirm each finding in the code. Report file:line, severity, fix. Never call obfuscated or escrowed code "safe". If a backdoor is found, list credentials to rotate.
+Follow [audit-checklist.md](references/audit-checklist.md): `audit.py`, `natives.py check --strict`, `manifest.py`, then confirm each finding in the code. For protected state, trace entry points to sinks and test relevant cases in security-validation.md. Report file:line, severity, fix and coverage limits. Never call obfuscated or escrowed code "safe". If a backdoor is found, list credentials to rotate.
 
 ### Convert between frameworks
-Map calls through the bridge contract; use the target framework file for exact APIs (QBCore → Qbox: [framework-qbox.md §16](references/framework-qbox.md)). Replace esx_menu / qb-menu / qb-input with ox_lib; qb-target with ox_target where available; never pair ox_inventory with QBCore.
+Map calls through the actual owner/bridge contract; verify installed target APIs (QBCore → Qbox: [framework-qbox.md §16](references/framework-qbox.md)). Preserve compatible UI/target dependencies unless the requested migration requires their replacement. Verify inventory support; the baseline ox_inventory does not support QBCore.
 
 ### Optimize / scale
-Measure first (`resmon`, `profiler`), then [performance.md](references/performance.md) → [performance-cookbook.md](references/performance-cookbook.md); DB → [database-optimization.md](references/database-optimization.md); big servers → [performance-server-scaling.md](references/performance-server-scaling.md). Report before/after numbers.
+For hitches or unclear latency, start with [hitch-diagnostics.md](references/hitch-diagnostics.md). Measure the affected subsystem, then [performance.md](references/performance.md) → [performance-cookbook.md](references/performance-cookbook.md); DB → [database-optimization.md](references/database-optimization.md); scale → [performance-server-scaling.md](references/performance-server-scaling.md). Re-verify vendor releases/support when recommending a DB today; versions or copied tuning presets do not guarantee no hitches. Report reproducible before/after numbers or **unmeasured**, using the experiment contract in design-and-validation.md.
 
 ## Output conventions
 - Lua: 4-space indent, `local` everything, single quotes, events `resource:side:action`, `Config` (shared) vs `ServerConfig` (server-only).
 - State the file and side (client/server/shared) for every snippet, plus required `fxmanifest.lua` / `server.cfg` / SQL changes.
-- Prefer ox_lib UI unless the server uses something else; locales via ox_lib `locale()` + `locales/*.json`.
+- Follow the project's language, UI and localization conventions. Use ox_lib when selected and compatible; do not introduce it solely to fit a template.
 - Answer in the user's language; code identifiers in English.

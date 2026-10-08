@@ -71,12 +71,24 @@ QBCore resources: qb-inventory 2.2.3, qb-target 5.5.0, qb-menu 1.5.0, qb-input 1
 | vMenu Enhanced / EasyAdmin | 1.0.6 (3.8.67) / 7.53 | |
 Full list and use/avoid per category: [ecosystem-resources.md](ecosystem-resources.md), [qbox-ecosystem.md](qbox-ecosystem.md), [esx-ecosystem.md](esx-ecosystem.md).
 
-## 5. Databases
-| Engine | Supported LTS (2026-10) | EOL |
+## 5. Databases — vendor recheck 2026-10-08
+| Engine | Maintained LTS patches observed | Support distinction |
 |---|---|---|
-| MariaDB | **12.3** (12.3.3), 11.8 (11.8.9), 11.4 (11.4.13) | 10.6 EOL 2026-07-06 |
-| MySQL | **8.4** (8.4.12), **9.7** (9.7.3, LTS since 2026-04-21) | 8.0 EOL 2026-04-30 |
-Recommendation: MariaDB 11.8 or 12.3 LTS (ox_core needs ≥ 11.4; Qbox ≥ 10.9; Qbox SQL uses MariaDB-only `IF NOT EXISTS` syntax). Details: [database-optimization.md](database-optimization.md).
+| MariaDB Community | 12.3.3, 11.8.9, 11.4.13, 10.11.19 | Community EOL: 12.3 on 2029-06-12; **11.8 on 2028-06-04**; 11.4 on 2029-05-29; 10.11 on 2028-02-16. 10.6 Community ended 2026-07-06. |
+| MySQL | 8.4.12, 9.7.3 | LTS policy and package availability must be checked for the selected deployment/support channel. |
+
+Primary evidence: [MariaDB maintenance](https://mariadb.org/about/#maintenance-policy),
+[maintenance releases](https://mariadb.org/mariadb-server-12-3-11-8-11-4-and-10-11-q3-2026-maintenance-releases-and-goodbye-10-6/),
+[MySQL 8.4](https://dev.mysql.com/doc/relnotes/mysql/8.4/en/),
+[MySQL 9.7](https://dev.mysql.com/doc/relnotes/mysql/9.7/en/) and
+[MySQL policy](https://dev.mysql.com/doc/refman/9.7/en/mysql-releases.html).
+
+For a new compatible ox deployment, evaluate a maintained MariaDB LTS; preserve
+supported MySQL when the project is compatible. Qbox baseline migrations contain
+MariaDB-specific syntax. MariaDB 12.3 changes snapshot-isolation defaults, so a major
+upgrade needs transaction/driver/migration tests. No version is a hitch-free guarantee.
+Re-verify when asked for a current recommendation; use the compatibility and tuning
+procedure in [database-optimization.md](database-optimization.md).
 
 ## 6. Tooling and npm (registry, 2026-10-07)
 | Package / tool | Version |

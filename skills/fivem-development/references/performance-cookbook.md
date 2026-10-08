@@ -24,7 +24,7 @@ Every "after" assumes `shared_script '@ox_lib/init.lua'` in the manifest when it
 17. Client data bootstrap → server push + view cache
 
 ## 1. Marker + key loop → `lib.points`
-Before (client) — ~0.10–0.30 ms always, even across the map:
+Before (client) — checks distance every frame, even across the map (no measured timing supplied):
 ```lua
 CreateThread(function()
     while true do
@@ -42,7 +42,7 @@ CreateThread(function()
     end
 end)
 ```
-After (client) — 0.00 ms away from shops; per-frame work only inside 15 m:
+After (client) — per-frame work only inside 15 m; the shared proximity loop still has a cost. Measure it including ox_lib:
 ```lua
 local textShown = false
 
@@ -70,7 +70,7 @@ for i = 1, #Config.Shops do
     })
 end
 ```
-Even better when the server runs ox_target: no marker, no per-frame code at all (`exports.ox_target:addSphereZone`, see [ox-inventory-target.md](ox-inventory-target.md)).
+When the server runs ox_target, consider `exports.ox_target:addSphereZone`: your marker/input loop can be removed, while targeting still performs work. Compare total cost and interaction behavior (see [ox-target.md](ox-target.md)).
 
 ## 2. Many points without ox_lib → one thread, dynamic sleep
 ```lua
@@ -340,34 +340,12 @@ end)
 ```
 Clear `lastFuel[vehicle]` when the vehicle is deleted (recipe 14) or it leaks.
 
-## 12. DB write per change → dirty flag + batched flush
-Before (server): `MySQL.update.await('UPDATE users SET money = ? WHERE identifier = ?', ...)` on every money change.
-After:
-```lua
-local dirty = {}            -- [identifier] = money
+## 12. Coalesce non-economic progress writes with acknowledged snapshots
+Use write-behind only for custom data whose crash-loss window the product accepts (for example cosmetic progress). Money, inventory and transferable rewards need their owner's durable transaction/reconciliation path. Do not add a second save loop over framework-owned balances.
 
-local function setMoney(identifier, amount)
-    dirty[identifier] = amount                -- in-memory value is authoritative; DB catches up
-end
+The tested Lua building block is [versioned_store.lua](../assets/examples/versioned_store.lua); integration and limitations are in [database-optimization.md section 7.4](database-optimization.md#74-cache-in-lua-write-behind). It keeps a generation number per key, serializes its writes, and retains failed or newer snapshots until acknowledged. Coalescing reduces writes when many mutations touch the same key; it does not by itself batch SQL or prove a performance gain.
 
-local function flush()
-    if next(dirty) == nil then return end
-    local queries, n = {}, 0
-    for identifier, money in pairs(dirty) do
-        n += 1
-        queries[n] = { query = 'UPDATE users SET money = ? WHERE identifier = ?', values = { money, identifier } }
-    end
-    dirty = {}
-    MySQL.transaction(queries, function(ok)
-        if not ok then print('^1[myres] money flush failed^7') end
-    end)
-end
-
-lib.cron.new('*/5 * * * *', flush)            -- every 5 minutes (or a CreateThread + Wait(300000))
-AddEventHandler('txAdmin:events:serverShuttingDown', flush)
-AddEventHandler('onResourceStop', function(res) if res == cache.resource then flush() end end)
-```
-Also flush a single player on `playerDropped`. Frameworks (Qbox/ESX/QBCore) already batch player saves — don't add a second per-change save on top. Indexes, pool size, query plans: `database-optimization.md`.
+Compare write count, database latency and pending-queue age under the same workload. Fault-test failed writes, a new mutation during an awaited write, disconnect and restart before comparing speed. No benchmark result is claimed for this replacement.
 
 ## 13. Server player polling → event-driven registry
 Before: every second, loop `GetPlayers()` and query each player's job from the framework.

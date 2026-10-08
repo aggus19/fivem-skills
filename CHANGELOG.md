@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased — project adaptation, security and hitch diagnosis (2026-10-08)
+
+- Reworked the staged plan in `docs/roadmap.md` around general project adaptation, operation security, client/server/NUI performance, databases/hitches, real integration and evidence maintenance. Runtime/benchmark stages remain explicitly pending.
+- Added `project-adaptation.md`, `security-validation.md` and `hitch-diagnostics.md` (53 references total). The skill preserves installed runtimes, custom forks, UI, package managers and data owners; security follows all entry points to effects and includes an adversarial acceptance matrix.
+- `scaffold.py` defaults to dependency-free Lua. The previous ox stack/shop is explicit `--profile ox-shop`; optional NUI works with either. Updated plugin command and installation guidance; verified overwrite targets reject symlinks/junction redirection and non-directory targets before deletion.
+- Removed the ledger-plus-export atomicity implication, unsafe retry wording and unbounded webhook alert queue from security guidance. Optional shop checks server-owned routing bucket/entity existence and bounds names, with added Lua logic cases for unauthorized contexts and stale identity.
+- Rechecked primary DB vendors: corrected MariaDB 11.8 **Community** maintenance to 2028-06-04; distinguished support channels, MySQL expression defaults and MariaDB 12.3 snapshot-isolation changes. Replaced slot-based DB presets and routine durability relaxation with workload, compatibility and recovery requirements.
+- Hitch guidance distinguishes Legacy timer intervals (main/network >150 ms; sync >100 ms in pinned source) from execution/query duration. Removed blanket tick/save/restart prescriptions and added correlated profiling, queue/host/DB hypotheses and before/after acceptance criteria.
+- Expanded evaluation scenarios from 12 to 18. These are specifications, not executed agent evaluations. No FXServer, real database integration or measured FiveM speedup is claimed.
+- Validation: **94/94 Python tests passed** on Windows/Python 3.12, including 30 Lua 5.4 logic tests and frozen-lock Bun builds for both profiles; **5/5 Bun fetch tests passed**. Python 3.8.10 portable passed 62 standard-library tests with 32 optional Lua/build tests explicitly skipped. Both generated profiles passed native/manifest checks; audit reported zero high/critical, with the shop's two grant/refund review candidates inspected. Internal Markdown targets resolve; SKILL.md is 157 lines. These results cover local tooling and mocked logic, not deployed framework/DB/CEF behavior.
+
+## Unreleased — reliability pass (2026-10-08)
+
+- Manifest-aware Lua native sides and audit routing; literal manifest parsing without executing Lua; resolved glob/download exposure checks. Invalid/empty input fails explicitly. Audit now scans individual files and shipped dist/build/stream code; display filters no longer hide failure status.
+- New offline regressions plus optional executed Lua 5.4 failure/interleaving tests and a real Bun NUI build. Repository CI covers Python 3.8/3.12, Lua logic and Bun. CI workflow is configured; remote CI and FXServer integration have not been run.
+- Replaced lossy money write-behind and unchecked crafting examples. Added a bounded versioned progress-write queue and checked custom-account transfer body; these are tested building blocks, not complete economy services.
+- Shop compensation checks definitive/unknown results and failed refunds. **Generated purchases now default to disabled** until the project wires durable operation/recovery and verifies adapter/session contracts. Removed the production-ready claim.
+- NUI includes Vite types, Bun lockfile, readiness handshake, callback deadlines and error handling. Corrected event-side/identity/anticheat-log-mode contradictions, unsupported timing claims and Python 3.8 catalog generation.
+- Added design-and-validation.md: ownership, session identity, interleaving, failure contracts, evidence levels and reproducible performance experiments. No FXServer benchmark improvement is claimed; the upstream version baseline remains 2026-10-07.
+- The bundled skill-creator quick validator rejects the existing `compatibility` field; the current Agent Skills specification and repository AGENTS.md allow it. Preserved the field and validate the repository's allowed fields/lengths in structural tests (https://agentskills.io/specification).
+- Local validation: Windows, Python 3.12 + test-only lupa 2.8 (`lua54`), **81/81 tests executed and passed**, including the frozen-lock Bun build; **5/5 Bun fetch tests passed** (Bun 1.4.2). Python 3.8.10 portable: 54 standard-library tests passed, 27 optional Lua/build cases explicitly skipped; catalog regeneration also produced 7,379 natives. Generated-resource native/manifest checks passed; audit had no high/critical findings. Its five medium candidates were reviewed: the intended grant/refund calls, production minification, and React DOM's HTML machinery (the app does not supply raw HTML). No remote CI, independent agent evals, FXServer/MySQL integration or performance benchmarks were executed.
+
 ## 1.2.0 — 2026-10-08
 Community-skill review: about 40 public GitHub repos (FiveM skills, rules, plugins, MCP servers) were cloned and read; ~400 of their claims were checked against primary sources. Only CONFIRMED items were merged; wrong or outdated claims were recorded as "common wrong advice" in `use-vs-avoid.md`. Full evidence trail: `docs/community-analysis/`.
 

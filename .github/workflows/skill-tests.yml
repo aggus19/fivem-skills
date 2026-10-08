@@ -1,0 +1,33 @@
+name: Skill validation
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  python:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+        python: ['3.8', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s tests -v
+  lua-and-nui:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - run: python -m pip install --only-binary=:all: lupa==2.8
+      - run: python -m unittest discover -s tests -v
+        env:
+          FIVEM_REQUIRE_LUA_TESTS: '1'
+          FIVEM_TEST_NUI_BUILD: '1'
+      - run: bun test ./tests/nui

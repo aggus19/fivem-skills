@@ -27,6 +27,9 @@ import time
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from resource_files import ManifestError, mask_lua, nearest_manifest, script_sides, walk_files
+
 SOURCES = {
     "gta": "https://static.cfx.re/natives/natives.json",
     "cfx": "https://runtime.fivem.net/doc/natives_cfx.json",
@@ -171,18 +174,47 @@ def side_of(path: Path, text: str) -> str | None:
 
 
 def cmd_check(args) -> int:
-    nat = load_index()["natives"]
-    files: list[Path] = []
+    files = set()
     for raw in args.paths:
         p = Path(raw)
-        files += [p] if p.is_file() else [f for f in p.rglob("*.lua") if "node_modules" not in f.parts]
+        if not p.exists():
+            print(f"not found: {p}", file=sys.stderr)
+            return 2
+        selected = {f.resolve() for f in walk_files(p) if f.suffix.lower() == '.lua'}
+        if not selected:
+            print(f"no Lua files to check: {p}", file=sys.stderr)
+            return 2
+        files.update(selected)
+    nat = load_index()["natives"]
     problems = 0
-    for f in files:
+    manifests = {}
+    for mf in {nearest_manifest(f) for f in files} - {None}:
+        try:
+            manifests[mf] = script_sides(mf)
+        except (ManifestError, OSError, UnicodeError, ValueError) as exc:
+            print(f"{mf}: UNRESOLVED-MANIFEST  {exc}")
+            manifests[mf] = {}
+            problems += 1
+    unknown_side = 0
+    for f in sorted(files):
+        if f.name in ('fxmanifest.lua', '__resource.lua'):
+            continue
         text = f.read_text(encoding="utf-8", errors="replace")
-        local_defs = set(DEF_RE.findall(text)) | set(ASSIGN_RE.findall(text))
-        side = side_of(f, text)
-        for ln, line in enumerate(text.splitlines(), 1):
-            code = re.sub(r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"", "''", line.split("--", 1)[0])
+        try:
+            code_text = mask_lua(text)
+        except ManifestError as exc:
+            print(f"{f}: UNPARSED  {exc}")
+            problems += 1
+            continue
+        local_defs = set(DEF_RE.findall(code_text)) | set(ASSIGN_RE.findall(code_text))
+        required = manifests.get(nearest_manifest(f), {}).get(f)
+        if not required:
+            fallback = side_of(f, text)
+            required = {fallback} if fallback else set()
+            if not required:
+                unknown_side += 1
+                print(f"{f}: UNKNOWN-SIDE  names checked only; runtime/require routing needs review", file=sys.stderr)
+        for ln, code in enumerate(code_text.splitlines(), 1):
             for m in CALL_RE.finditer(code):
                 name = m.group(1)
                 if name in NOT_NATIVES or name in local_defs:
@@ -194,10 +226,11 @@ def cmd_check(args) -> int:
                         problems += 1
                     continue
                 avail = sides(entries)
-                if side and not avail & {"shared", side}:
-                    print(f"{f}:{ln}: WRONG-SIDE  {name}() is {'/'.join(sorted(avail))}-only but used in a {side} file")
+                missing = required - ({'client', 'server'} if 'shared' in avail else avail)
+                if missing:
+                    print(f"{f}:{ln}: WRONG-SIDE  {name}() is {'/'.join(sorted(avail))}-only but used in a {'/'.join(sorted(required))} file (unavailable on {'/'.join(sorted(missing))})")
                     problems += 1
-    print(f"-- checked {len(files)} file(s), {problems} problem(s)", file=sys.stderr)
+    print(f"-- inspected {len(files)} Lua file(s), {problems} problem(s), {unknown_side} with unknown side; lexical checks only (no argument/control-flow/runtime validation)", file=sys.stderr)
     return 1 if problems else 0
 
 

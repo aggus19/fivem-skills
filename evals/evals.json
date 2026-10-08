@@ -4,13 +4,15 @@
     {
       "id": 1,
       "prompt": "Make me a QBox script where players can sell fish at the fish market for money.",
-      "expected_output": "Resource scaffolded with ox_lib; server computes the price from server config, validates source/distance/item whitelist/count/cooldown, removes items before adding money via exports.qbx_core:AddMoney / ox_inventory; client uses ox_target or lib.points; no price sent from client.",
+      "expected_output": "Matches the installed Qbox/inventory contracts; validates actor, permissions, distance, item/quantity and cooldown. Checks each mutation/compensation result; distinguishes definitive failures from unknown outcomes; requires durable recovery for cross-owner effects. Client sends intent only.",
       "assertions": [
         "No price or reward amount is sent from client to server",
         "Uses exports.qbx_core / ox_inventory, not deprecated Player.Functions",
         "Server checks distance to the market",
         "Item removal happens before money is added",
-        "Ran or recommended natives.py check, manifest.py and audit.py"
+        "Actually runs applicable validators on created files and reports their scope; explicitly marks unavailable runtime checks as pending",
+        "Checks grant/refund failures and does not present separate exports as an atomic transaction",
+        "Does not enable an incomplete economy integration by merely toggling the scaffold flag"
       ]
     },
     {
@@ -63,6 +65,140 @@
         "Mentions asset conversion with Alchemist / stream_enhanced",
         "Recommends staging tests rather than migrating production now"
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "Review this optimization: snapshot dirty money changes, clear the dirty table, submit MySQL.transaction, and only print when it fails. Can I use it on my production economy?",
+      "expected_output": "Identifies lost writes and crash window, preserves the framework persistence owner and requires an acknowledged durable policy; supplies fault cases without claiming a benchmark.",
+      "assertions": [
+        "Explains failed-write loss",
+        "Distinguishes non-economic write-behind from money durability",
+        "Tests or explicitly proposes a mutation during an awaited flush",
+        "Does not invent before/after performance numbers"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "A resource has server_script main.lua and main.lua calls PlayerPedId(). The checker passed. Investigate and fix the checker.",
+      "expected_output": "Reproduces the neutral-filename case and routes sides using the manifest, with shared/dual-side coverage and explicit dynamic-manifest limits.",
+      "assertions": [
+        "Adds an executable failing-before/passing-after regression",
+        "Checks shared files against both runtimes",
+        "Does not execute arbitrary manifest Lua to parse it"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Create a NUI scaffold using Bun, build it, and ensure opening it immediately after resource start cannot lose the first message or trap focus.",
+      "expected_output": "Uses the existing Bun lockfile, executes a production build, coordinates listener readiness and bounded callbacks, and distinguishes mocked lifecycle tests from real CEF acceptance.",
+      "assertions": [
+        "Runs bun install --frozen-lockfile and bun run --bun build",
+        "Tests early open, close and reload",
+        "No unhandled failed fetch or unlimited callback wait",
+        "Does not claim CEF runtime performance from a Vite build"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Implement a 5-second crafting action. Test player disconnect, character switch, reused source, a late timer and full inventory at completion.",
+      "expected_output": "Models operation/session identity and cancellation/commit states, defers effects or reserves through the inventory owner, checks all mutations and specifies durable compensation/reconciliation.",
+      "assertions": [
+        "Old timer cannot clear a new operation lock",
+        "Rechecks capacity and identity at commitment",
+        "Does not invent an atomic inventory export",
+        "Unknown grant/refund result is not blindly retried"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Optimize markers and a HUD for a busy server. I want verified client and server performance improvements, including when the change makes things worse.",
+      "expected_output": "Establishes a reproducible workload, obtains profiler evidence where available, measures dependencies/NUI/network and reports tradeoffs; unavailable runtime results remain unmeasured.",
+      "assertions": [
+        "Separates CPU execution from awaited latency",
+        "Includes FPS/workload and dependency attribution",
+        "Preserves responsiveness and consistency",
+        "Reports raw evidence or explicitly says measurements are pending"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Audit a TypeScript resource shipped as dist/server.js. Also check a single Lua file and use --min critical to keep the report short.",
+      "expected_output": "Reviews shipped executable code and single-file input; preserves high-severity failure status despite the presentation filter and reports excluded dependencies.",
+      "assertions": [
+        "Does not skip executable dist output",
+        "Checks the single file",
+        "Does not describe filtered findings as absent",
+        "Separates heuristic candidates from confirmed vulnerabilities"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "En este servidor standalone quiero un comando Lua para abrir mi interfaz existente. No uso ox ni DB y compilo con Bun.",
+      "expected_output": "Adapts to the existing UI and uses only needed dependencies; discovers local contracts and uses the minimal profile only if useful.",
+      "assertions": [
+        "Does not introduce ox_lib, oxmysql, inventory or a shop",
+        "Preserves Bun and the existing UI",
+        "Resolves helper paths from the installed skill directory",
+        "Reports actual validation and missing runtime evidence"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Auditá todos los caminos que pueden dar dinero: el evento llama a un helper, también hay un callback y un export que lo usa.",
+      "expected_output": "Traces every reachable entry point to the money owner; checks actor/subject authorization, concurrency, persistence and unknown outcomes.",
+      "assertions": [
+        "Does not treat event names or client tokens as authorization",
+        "Examines indirect helpers and alternative callers",
+        "Distinguishes network source from export/callback contracts",
+        "Tests or explicitly specifies unauthorized, concurrent, replay and disconnect cases",
+        "Does not certify safety from audit.py alone"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Veo network thread hitch warning de 180 ms y oxmysql de 300 ms. ¿Qué versión de MariaDB instalo para arreglarlo?",
+      "expected_output": "Separates timer interval, query timing and correlation; obtains trace/host/pool evidence before attributing cause or proposing migration.",
+      "assertions": [
+        "Does not promise a DB version eliminates hitches",
+        "Explains await yields and does not prove main-thread blocking",
+        "Matches thresholds to artifact/edition",
+        "Proposes a falsifiable before/after experiment with queue/host/DB evidence"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "Recomendame una DB para hoy. Tengo MySQL 8.4 con SQL propio compatible y quiero evitar perder dinero cuando se cae el host.",
+      "expected_output": "Rechecks vendor support/availability, preserves compatible maintained MySQL, assesses crash durability and owner persistence.",
+      "assertions": [
+        "Uses current primary vendor sources with verification date",
+        "Does not claim MariaDB is universally faster",
+        "Does not confuse Community and Enterprise EOL",
+        "Does not recommend flush-at-commit 2 as a routine performance fix",
+        "Includes restore/migration and transaction recovery validation"
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Para evitar duplicados inserté PENDING en SQL, llamo AddItem y luego marco DONE. ¿Está resuelto incluso al reiniciar?",
+      "expected_output": "Identifies the effect/result crash window and requires owner idempotency or durable evidence-based reconciliation.",
+      "assertions": [
+        "Does not call the ledger and inventory export atomic",
+        "Does not retry an unknown grant or mark it failed blindly",
+        "Binds operation identity to actor and intent",
+        "Checks restart between claim, effect and final result"
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Este recurso usa C# y un framework privado. Optimizá una consulta sin cambiar la interfaz ni instalar otro inventario.",
+      "expected_output": "Inspects the real source/API/SQL plan and preserves runtime, ownership and dependencies.",
+      "assertions": [
+        "Does not generate a Lua shop or migrate framework",
+        "States Lua native checker coverage does not validate C#",
+        "Does not invent private exports",
+        "Measures or marks the proposed optimization unmeasured"
+      ]
     }
-  ]
+  ],
+  "execution_status": "Scenarios only; not executed by the Python/Bun unit suites. Record agent outputs and evidence separately."
 }

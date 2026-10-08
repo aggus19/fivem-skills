@@ -128,7 +128,7 @@ selene is optional in CI because of CfxLua syntax (install the binary from its r
 |---|---|---|
 | F8 console | client | Script errors (`SCRIPT ERROR: @res/file.lua:12`), `print` output. First error wins. |
 | Server console / txAdmin live console | server | Server errors, `ensure`/`restart`, `refresh`. |
-| `resmon` (`resmon 1`) | client | Per-resource CPU ms / memory; idle target 0.00–0.02 ms. |
+| `resmon` (`resmon 1`) | client | Per-resource CPU ms / memory; contextual workload budget, not a universal idle target. |
 | `profiler record 500` → `profiler view` / `profiler saveJSON file.json`; `profiler status` | client F8 and server console | Frame-level script timing; open in Chrome. |
 | `nui_devtools` / http://localhost:13172 | client | Chromium devtools for NUI/DUI (dev mode). |
 | `strict` natives check | skill | `python scripts/natives.py check <res> --strict`. |
@@ -144,7 +144,7 @@ Offline doc mirror for grep (about 8 MB instead of the 274 MB full fivem-docs ta
 | `scripts/natives.py` | `update`, `search`, `show`, `check` natives (official DB, offline cache) |
 | `scripts/manifest.py` | validate `fxmanifest.lua` vs files on disk |
 | `scripts/audit.py` | heuristic security/performance/compat audit |
-| `scripts/scaffold.py` | create a resource from templates (bridge, optional NUI) |
+| `scripts/scaffold.py` | create dependency-free Lua by default; explicit ox-shop profile and optional NUI |
 | `scripts/rcon.py` | send one RCON command over UDP (password from env `FIVEM_RCON_PASSWORD`; dev servers only; see [ai-dev-workflow-and-mcp.md](ai-dev-workflow-and-mcp.md)) |
 | `scripts/server_info.py` | summarise `/info.json`, `/dynamic.json`, `/players.json` (+ `--resource` started-check, `--getinfo`) without credentials |
 
@@ -154,3 +154,8 @@ Offline doc mirror for grep (about 8 MB instead of the 274 MB full fivem-docs ta
 - https://www.npmjs.com/package/esbuild · https://www.npmjs.com/package/rolldown · https://www.npmjs.com/package/tsup · https://www.npmjs.com/package/tsdown · https://www.npmjs.com/package/typescript · https://www.npmjs.com/package/@citizenfx/server
 - https://docs.fivem.net/docs/scripting-manual/runtimes/javascript/ · https://docs.fivem.net/docs/scripting-manual/debugging/using-profiler/ · https://forum.cfx.re/t/809058
 - https://github.com/actions/checkout/releases · https://github.com/JohnnyMorganz/stylua-action
+
+## Validation scope and Bun
+- Use the existing project's package manager/lockfile. The NUI template includes `bun.lock`: `bun install --frozen-lockfile` then `bun run --bun build`. Bun is build tooling here; it does not replace FXServer's embedded JS runtime or CEF. For an npm project generate/review its package-lock once, then use `npm ci`; do not keep competing lockfiles.
+- Script coverage and failure tests: [design-and-validation.md](design-and-validation.md). `--min` filters audit output only; all high/critical findings still fail. Build/stream directories containing code are scanned.
+- The manifest helper supports literal Lua metadata only and never executes a resource manifest. Unsupported dynamic expressions require explicit review, not an assumed clean result.

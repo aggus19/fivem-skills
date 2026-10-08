@@ -65,7 +65,7 @@ profiler save <file> / profiler load <file>   -- internal msgpack format
 
 ## 2. Budgets
 - 60 FPS = **16.6 ms per frame** for the game plus every resource. 144 FPS = 6.9 ms. Script time is pure overhead on top of the game.
-- Per resource (community consensus, consistent with the warning threshold): idle **0.00–0.02 ms**, active (drawing, UI open) **< 0.10–0.20 ms**, frameworks/inventories under load < 0.5 ms. `[Total CPU]` for a whole RP server should stay well under 2 ms idle.
+- Illustrative community targets: idle **0.00–0.02 ms**, active **0.10–0.20 ms** for small resources. These are not measured guarantees or universal release gates; cost depends on hardware, FPS, workload and attribution to dependencies. Establish a project baseline and include total CPU/frame time, NUI/GPU and network behavior. A rounded `0.00` does not mean zero work. See [design-and-validation.md](design-and-validation.md#6-performance-experiment-contract).
 - Server svMain ticks every **50 ms**; all resources' work for that tick should take a few ms, never tens. Anything > 150 ms prints a hitch and delays every event for every player.
 - A Lua thread sleeping in `Wait(n)` costs ~0 (scheduler bookmarks, C++ side). An empty JS `setTick` historically showed ~0.01–0.05 ms (JS ScRT has no bookmark scheduling — citizenfx/fivem#1653).
 
@@ -139,7 +139,7 @@ Only in code that runs per frame or per entity × many; elsewhere favour clarity
 ## 9. Server-side scripting
 - Never block svMain: no synchronous HTTP, no busy loops, no huge `json.decode` per tick, no `MySQL.*.await` for every player in one tick.
 - Event handlers run on svMain: validate and return; offload heavy work to a thread that yields (`Wait(0)` between batches).
-- Batch DB writes (dirty flag + flush every 5–15 min and on `playerDropped`/txAdmin shutdown event). oxmysql prints queries slower than `mysql_slow_query_warning` (default **200 ms**). Indexing, prepared statements, pool sizing: see `database-optimization.md` (owned separately) and [database-oxmysql.md](database-oxmysql.md).
+- Batch writes only within the data owner's consistency/durability policy. A dirty flag must survive a failed write; disconnect/shutdown hooks cannot guarantee delivery after a crash. Keep economy persistence with its owner. For slow operations and hitches, separate awaited latency from execution work using `hitch-diagnostics.md`; SQL, indexes and pool sizing are in `database-optimization.md` and [database-oxmysql.md](database-oxmysql.md).
 - Iterate players on events (join/drop/job change) instead of `GetPlayers()` loops every second; keep a server-side table keyed by `source`.
 - Delete what you create: track server entities; delete on `onResourceStop` and when the owner drops; `SetEntityOrphanMode` to control what happens when the owner leaves.
 - Cache config/static data at start (don't re-read files/DB per request).
@@ -194,12 +194,12 @@ More server/streaming values: [performance-server-scaling.md §9](performance-se
 
 ## 13. Checklist
 - [ ] Measured with resmon/profiler before and after; numbers reported.
-- [ ] Resource idle ≤ 0.02 ms client; no thread at `Wait(0)` while idle.
+- [ ] Resource meets the measured project budget; per-frame idle work is justified by actual per-frame requirements.
 - [ ] Interactions via ox_target / `lib.points` / `lib.zones`; keybinds via `RegisterKeyMapping`.
 - [ ] No per-frame `GetHashKey`, `GetDistanceBetweenCoords`, pool scans, sync shape tests, table/string creation.
 - [ ] Per-frame natives only while needed, in one thread.
 - [ ] No events > a few/s per player; big payloads latent; no large broadcasts; GlobalState small.
-- [ ] Server: no hitch warnings under load; DB writes batched; slow-query log clean.
+- [ ] Server: measured tick/latency behavior under load; DB batching/coalescing preserves the required durability and recovery contract; slow queries investigated.
 - [ ] NUI hidden and idle when closed; messages on change only; production build.
 - [ ] Entities, blips, handlers, points cleaned up on `onResourceStop` and player drop.
 - [ ] Memory flat over a 30-minute session.

@@ -1,6 +1,6 @@
 # FiveM Skills — `fivem-development`
 
-Skill para agentes de IA (Claude Code, OpenAI Codex, Cursor y otras herramientas compatibles con Agent Skills) que trae conocimiento **actualizado al 7 de octubre de 2026** sobre desarrollo en FiveM, scripts verificadores y plantillas listas para producción.
+Skill para agentes de IA (Claude Code, OpenAI Codex, Cursor y otras herramientas compatibles con Agent Skills) que trae conocimiento **actualizado al 7 de octubre de 2026** sobre desarrollo en FiveM, scripts de comprobación y plantillas de integración con límites de validación explícitos.
 
 > Las versiones se verificaron contra fuentes primarias (GitHub releases, npm, docs.fivem.net, forum.cfx.re, API de artifacts) el **2026-10-07**. Ver [`skills/fivem-development/references/versions.md`](skills/fivem-development/references/versions.md).
 
@@ -9,13 +9,29 @@ Skill para agentes de IA (Claude Code, OpenAI Codex, Cursor y otras herramientas
 | Área | Contenido |
 |---|---|
 | **SKILL.md** | Reglas no negociables (autoridad del servidor, no inventar natives, detectar el stack, APIs actuales, presupuesto de rendimiento, licencias), tabla de ruteo a referencias y flujos de trabajo (crear, modificar, auditar, convertir, optimizar). |
-| **49 referencias (~12.300 líneas)** | **Plataforma:** versiones y línea de tiempo de cambios · server.cfg/instalación/ACE · todas las convars y comandos con valores recomendados · txAdmin completo · OneSync/entidades/state bags/routing buckets · GTA V Enhanced. **Scripting:** fxmanifest (todas las directivas) · runtimes CfxLua 5.4.8/JS/TS/C# · todos los eventos nativos · guía de natives + 699 natives esenciales verificadas · NUI/DUI · tooling · debugging. **ox:** ox_lib completo en 6 archivos (UI, core, world, utilidades, JS) · oxmysql · optimización de bases de datos (MariaDB/MySQL, índices, my.cnf, backups) · ox_inventory · ox_target · ox_core · ox_doorlock/ox_fuel. **Frameworks:** Qbox + ecosistema qbx · ESX Legacy 1.15.2 + ecosistema · QBCore (refactor 2026) · ND/vRP · bridge multi-framework · recursos de la comunidad por categoría. **Gameplay:** patrones · diseño de sistemas RP · vehículos y handling · mapeo/streaming/ropa. **Calidad:** qué usar vs qué evitar · seguridad · anticheat · checklist de auditoría · rendimiento + cookbook + escalado de servidores grandes · licencias (PLA 2026‑09‑10). |
+| **53 referencias** | **Plataforma:** versiones y línea de tiempo de cambios · server.cfg/instalación/ACE · todas las convars y comandos con valores recomendados · txAdmin completo · OneSync/entidades/state bags/routing buckets · GTA V Enhanced. **Scripting:** fxmanifest (todas las directivas) · runtimes CfxLua 5.4.8/JS/TS/C# · todos los eventos nativos · guía de natives + 699 natives esenciales verificadas · NUI/DUI · tooling · debugging. **ox:** ox_lib completo en 6 archivos (UI, core, world, utilidades, JS) · oxmysql · optimización de bases de datos (MariaDB/MySQL, índices, my.cnf, backups) · ox_inventory · ox_target · ox_core · ox_doorlock/ox_fuel. **Frameworks:** Qbox + ecosistema qbx · ESX Legacy 1.15.2 + ecosistema · QBCore (refactor 2026) · ND/vRP · bridge multi-framework · recursos de la comunidad por categoría. **Gameplay:** patrones · diseño de sistemas RP · vehículos y handling · mapeo/streaming/ropa. **Calidad:** qué usar vs qué evitar · seguridad · anticheat · checklist de auditoría · rendimiento + cookbook + escalado de servidores grandes · licencias (PLA 2026‑09‑10). |
 | **Catálogo de natives** | `assets/natives/`: las **7.379** natives (6.436 GTA + 943 CFX) en 47 archivos por namespace, con firma Lua, lado, hash, build mínimo, nombres viejos y link a docs. Regenerable con `build_natives_catalog.py`. |
-| **7 scripts** (Python, sin dependencias): `rcon.py` y `server_info.py` para probar recursos contra un servidor; ver más abajo. Los otros 5: | `natives.py` (busca/verifica natives, incluye nombres viejos, detecta natives inventadas y del lado equivocado) · `build_natives_catalog.py` (regenera el catálogo) · `manifest.py` (valida fxmanifest) · `audit.py` (backdoors conocidos, SQLi, confianza en el cliente, XSS en NUI, webhooks expuestos, `.cfg` inseguros, loops sin Wait, APIs obsoletas) · `scaffold.py` (genera recursos). |
-| **Plantillas** | Recurso Lua con *bridge* que autodetecta Qbox / ESX / QBCore / standalone + ejemplo de tienda segura (las 5 validaciones del servidor) · NUI React 19 + Vite 8 + TypeScript 7 con target `chrome103` (CEF de FiveM Legacy). |
+| **7 comandos + helper compartido** (Python 3.8+, sin dependencias): `rcon.py` y `server_info.py` para probar recursos contra un servidor; ver más abajo. Los otros 5: | `natives.py` (busca/verifica natives, incluye nombres viejos, detecta natives inventadas y del lado equivocado) · `build_natives_catalog.py` (regenera el catálogo) · `manifest.py` (valida fxmanifest) · `audit.py` (backdoors conocidos, SQLi, confianza en el cliente, XSS en NUI, webhooks expuestos, `.cfg` inseguros, loops sin Wait, APIs obsoletas) · `scaffold.py` (genera recursos). |
+| **Plantillas** | Lua mínimo sin dependencias por defecto; perfil opcional `ox-shop` con *bridge* que autodetecta Qbox / ESX / QBCore / standalone + ejemplo de tienda con compensaciones comprobadas (compras desactivadas hasta integrar recuperación persistente) · NUI React 19 + Vite 8 + TypeScript 7 con target `chrome103` (CEF de FiveM Legacy). |
 | **Configs** | `.luarc.json` (LuaLS + addon FiveM), `selene.toml` + std `cfx.yml`, `.stylua.toml`, `server.cfg.example`, workflow de GitHub Actions. |
 | **Plugin de Claude Code** | Comandos `/fivem-new`, `/fivem-audit`, `/fivem-native` y el subagente `fivem-auditor`. |
-| **Tests** | `python -m unittest discover -s tests -v` (offline, 35 tests). |
+| **Tests** | `python -m unittest discover -s tests -v` (offline); pruebas opcionales de lógica Lua 5.4 y compilación NUI real. Ver Validación. |
+
+## Alcance general y plan
+
+La skill se adapta a cada solicitud y al stack instalado: standalone, frameworks y
+forks, Lua/JS/C#, interfaces existentes y datos con distintos propietarios. El perfil
+mínimo no instala ox_lib, oxmysql ni una tienda. Los ejemplos de economía son opcionales
+y requieren verificar contratos, persistencia y recuperación antes de habilitarlos.
+
+- [Adaptación al proyecto](skills/fivem-development/references/project-adaptation.md).
+- [Seguridad de triggers, callbacks, exports y operaciones](skills/fivem-development/references/security-validation.md), con pruebas negativas y de concurrencia/recuperación.
+- [Diagnóstico de hitches](skills/fivem-development/references/hitch-diagnostics.md), separando scripts, sincronización, red, DB y host.
+- [Plan de etapas y evidencia pendiente](docs/roadmap.md).
+
+Las recomendaciones de DB y soporte se revisaron el **2026-10-08**. Una versión nueva
+no garantiza mayor rendimiento ni ausencia de hitches; se exige compatibilidad y
+medición. Las pruebas locales no equivalen a integración FXServer ni a un benchmark.
 
 ## Datos clave del baseline (2026-10-07)
 
@@ -48,7 +64,7 @@ Skill para agentes de IA (Claude Code, OpenAI Codex, Cursor y otras herramientas
 Copiá `skills/fivem-development/` a `~/.claude/skills/fivem-development/` (global) o a `.claude/skills/fivem-development/` dentro de tu proyecto.
 
 ### OpenAI Codex
-Copiá `skills/fivem-development/` a `~/.agents/skills/` o a `.agents/skills/` del repo. `AGENTS.md` en la raíz da instrucciones de proyecto.
+Copiá la carpeta completa a `~/.agents/skills/fivem-development/` o a `.agents/skills/fivem-development/` dentro del proyecto. Conservá `scripts/`, `references/` y `assets/`. Integrá la indicación de cargar esa `SKILL.md` en el `AGENTS.md` existente, sin reemplazar las instrucciones del servidor. Los helpers se resuelven desde la ubicación instalada de la skill. La skill no es un recurso de FXServer y no lleva `ensure` en `server.cfg`.
 
 ### Cursor
 Cursor lee `.cursor/skills/`, `.agents/skills/` y también `.claude/skills/`: copiá la carpeta de la skill a cualquiera de esas rutas.
@@ -66,7 +82,8 @@ python scripts/natives.py show GetEntityCoords          # firma exacta cliente y
 python scripts/natives.py check ../../mi_recurso --strict
 python scripts/manifest.py ../../mi_recurso
 python scripts/audit.py ../../resources --min medium
-python scripts/scaffold.py mi_tienda --out ../../resources/[custom] --nui
+python scripts/scaffold.py mi_recurso --out "../../resources/[custom]"
+python scripts/scaffold.py mi_tienda --profile ox-shop --out "../../resources/[custom]" --nui
 ```
 
 ## Estructura
@@ -75,11 +92,11 @@ FiveM Skills/
 ├── .claude-plugin/        plugin.json + marketplace.json
 ├── skills/fivem-development/
 │   ├── SKILL.md
-│   ├── references/        49 documentos
+│   ├── references/        53 documentos
 │   ├── scripts/           natives.py · build_natives_catalog.py · manifest.py · audit.py · scaffold.py
 │   └── assets/
 │       ├── natives/       catálogo completo (47 archivos por namespace)
-│       ├── templates/     resource-lua/ · nui-react-vite/
+│       ├── templates/     resource-minimal/ · resource-lua/ · nui-react-vite/
 │       └── configs/       .luarc.json · selene.toml · cfx.yml · .stylua.toml · server.cfg.example · github-workflow.yml
 ├── commands/              /fivem-new · /fivem-audit · /fivem-native
 ├── agents/                fivem-auditor
@@ -88,6 +105,28 @@ FiveM Skills/
 ├── tests/                 tests offline de los scripts
 ├── AGENTS.md · CHANGELOG.md · LICENSE
 ```
+
+## Validación
+
+Los scripts de la skill siguen usando solamente la biblioteca estándar de Python 3.8+. Las dependencias siguientes son exclusivas de las pruebas del repositorio:
+
+```powershell
+python -m unittest discover -s tests -v
+# Opcional: ejecutar también los casos Lua y la compilación NUI (en un entorno de pruebas)
+python -m pip install lupa==2.8
+$env:FIVEM_REQUIRE_LUA_TESTS = '1'
+$env:FIVEM_TEST_NUI_BUILD = '1'
+python -m unittest discover -s tests -v
+bun test ./tests/nui
+```
+
+En bash: `FIVEM_REQUIRE_LUA_TESTS=1 FIVEM_TEST_NUI_BUILD=1 python -m unittest discover -s tests -v`.
+
+La suite básica no descarga dependencias. La compilación opcional usa Bun 1.4.2 y el `bun.lock` de la plantilla con `--frozen-lockfile`; requiere registro o caché. Lua usa `lupa.lua54`, con adaptadores que simulan fallos y cesiones de ejecución. Sin esos requisitos los casos opcionales figuran como omitidos; no deben contarse como aprobados.
+
+`.github/workflows/skill-tests.yml` configura la matriz Python 3.8/3.12 y exige las pruebas Lua/NUI en un trabajo separado. La compilación y las pruebas de lógica no sustituyen CfxLua, oxmysql/InnoDB, CEF ni dos clientes reales de FiveM. Criterios y experimentos: [design-and-validation.md](skills/fivem-development/references/design-and-validation.md).
+
+`audit.py --min` filtra la presentación: un hallazgo high/critical oculto sigue devolviendo error. El escáner incluye código compilado, pero excluye node_modules; no certifica dependencias. Los manifiestos calculados se reportan como no analizables; nunca se ejecutan para validarlos.
 
 ## Mantenimiento
 Las versiones envejecen. Para actualizar el baseline: seguí la sección "How to re-verify" de `references/versions.md`, actualizá las tablas y `metadata.baseline-date` en `SKILL.md`, corré los tests y anotá los cambios en `CHANGELOG.md`.

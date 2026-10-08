@@ -138,7 +138,6 @@ Persistence across restarts is your job: save model/plate/coords/props to SQL an
 | `entityCreating` | `handle` | Fired before a **client**-created entity is accepted. `CancelEvent()` rejects it. Ideal model blacklist. |
 | `entityCreated` | `handle` | After creation (any origin). Tagging, logging. Entity may not have full data yet. |
 | `entityRemoved` | `entity` | Cleanup of your tables. |
-| `populationPedCreating` | `x, y, z, model, setters` | Before a population ped spawns; `setters.setModel()/setPosition()`, or `CancelEvent()`. |
 | `onEntityBucketChange` / `onPlayerBucketChange` | `entity|player, bucket, oldBucket` | React to routing-bucket moves. |
 | `playerEnteredScope` / `playerLeftScope` | `data` (`data.player`, `data['for']`) | Scope tracking — costly (N² calls); prefer state bags. |
 | `weaponDamageEvent`, `startProjectileEvent`, `ptFxEvent`, `removeAllWeaponsEvent`, `explosionEvent`, `giveWeaponEvent`, `removeWeaponEvent`, `clearPedTasksEvent`, `fireEvent` | `sender, data` | Routed game events; `CancelEvent()` blocks routing. Payload fields: docs server-events page / natives docs. |
@@ -160,7 +159,7 @@ end)
 
 Population type (`GetEntityPopulationType`, server) distinguishes ambient (1–5, random population) from mission/script (7 = `POPTYPE_MISSION`) entities — handy to skip ambient traffic in `entityCreating`.
 
-**Entity lifecycle checklist:** (1) decide who creates and who may delete each entity; (2) persist stable ids (DB id, plate, netId), never client handles across sessions; (3) handle spawn failure (model timeout, `DoesEntityExist` timeout) without leaving a half-created state; (4) handle owner drop / migration (`SetEntityOrphanMode`, `entityRemoved`); (5) make cleanup idempotent (safe to call twice); (6) on resource start, **reconcile** with existing world entities/DB state before respawning persistent objects so restarts don't duplicate them.
+**Entity lifecycle checklist:** (1) decide who creates and who may delete each entity; (2) persist a durable business/DB id; plates need uniqueness/ownership checks, while netIds and handles are temporary and reusable; (3) handle spawn failure (model timeout, `DoesEntityExist` timeout) without leaving a half-created state; (4) handle owner drop / migration (`SetEntityOrphanMode`, `entityRemoved`); (5) make cleanup idempotent (safe to call twice); (6) on resource start, **reconcile** with existing world entities/DB state before respawning persistent objects so restarts don't duplicate them.
 
 ## 8. Entity lockdown, request-control filter, net game events
 **Entity lockdown** — who may create networked entities:
@@ -269,7 +268,7 @@ end)
 ## 12. Population control
 - Global off: `set onesync_population false` (startup). Per bucket: `SetRoutingBucketPopulationEnabled`.
 - Density: client natives each frame (`SetVehicleDensityMultiplierThisFrame`, `SetPedDensityMultiplierThisFrame`...) on every client — population is spawned by the grid-owning client, so all clients must agree.
-- Replace/block: `populationPedCreating` with `setters.setModel()` / `CancelEvent()`; `entityCreating` + `GetEntityPopulationType` for vehicles.
+- Client population hook: `populationPedCreating` with `setters.setModel()` / `CancelEvent()`. It is not a server event or an authority boundary. Server network-entity filtering uses `entityCreating`; per-bucket population uses `SetRoutingBucketPopulationEnabled`.
 - **`strict` lockdown also blocks ambient population** (population is client-created): source `ServerGameState.cpp` only allows random population types (ambient/parked/patrol/permanent/scenario) when the mode is *not* strict. So `strict` = empty streets unless the server spawns peds/vehicles itself; `relaxed` keeps ambient life while blocking script entities. A bucket with population disabled is treated as `strict` for lockdown checks. (Enhanced: in `relaxed`, population spawns only in grid cells the player owns.)
 
 ## 13. Pool sizes

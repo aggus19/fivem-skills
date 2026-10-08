@@ -1,0 +1,3 @@
+-- Server logic for {{RESOURCE_NAME}}. No framework or database is assumed.
+-- Before exposing a mutation, establish actor, permission, input bounds,
+-- rate limits, ownership, concurrency and failure/recovery contracts.

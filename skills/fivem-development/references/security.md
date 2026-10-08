@@ -22,7 +22,7 @@ Baseline: FXServer Legacy 35245 / Latest 37150, OneSync forced on, ox_lib 3.40, 
 17. Review checklist
 18. Sources
 
-Related: [anticheat.md](anticheat.md) (game-event filtering, heartbeats, honeypots, detections), [audit-checklist.md](audit-checklist.md) (procedure and backdoor signatures), [use-vs-avoid.md](use-vs-avoid.md).
+Related: [security-validation.md](security-validation.md) (entry-point inventory, operation contracts, replay/concurrency/failure tests), [anticheat.md](anticheat.md) (game-event filtering, detections), [audit-checklist.md](audit-checklist.md) (audit procedure).
 
 ## 1. Threat model
 - **Everything on the client is attacker-controlled.** Executors can call `TriggerServerEvent` with any name and arguments, call client exports, inject into NUI, read every client/shared file, fake NUI callbacks and write client-side state bags.
@@ -34,47 +34,21 @@ Related: [anticheat.md](anticheat.md) (game-event filtering, heartbeats, honeypo
 
 ## 2. The five server-side checks
 Every net event, callback or export that changes state must answer:
-1. **Who?** `local src = source` on the first line (`source` is a global; it changes after any yield). Resolve the player object; reject `nil`.
+1. **Who?** In a Lua net event, capture `local src = source` before yielding. For callbacks/exports/commands, verify the runtime's actor/caller contract rather than assuming the global source applies. Resolve the current actor and reject missing/invalid sessions.
 2. **Allowed?** Job/grade, gang, ACE permission, ownership of the target entity/vehicle/stash, active job/session state stored server-side.
-3. **Where?** `#(GetEntityCoords(GetPlayerPed(src)) - point)` against a server-side coordinate (docs example uses 15.0; typical 3–10 m).
-4. **What?** Type-check and clamp every argument; whitelist names against server config; recompute prices server-side; reject NaN (`x ~= x`), `math.huge`, negatives, non-integers where integers are expected, oversized strings/tables.
+3. **Where?** When location matters, validate the server-observed ped/entity, distance and routing bucket against the intended interaction. Choose tolerance for the mechanic; client-synchronized position alone does not prove legitimate activity.
+4. **What?** Validate types and bounds; reject invalid privileged quantities rather than silently clamping them. Whitelist names/metadata against server config, recompute prices, and reject non-finite numbers, negatives, invalid fractions and oversized/deep payloads before expensive work.
 5. **How often?** Cooldown / rate limit per player per action, plus a "busy" lock while an action is in progress.
 
-On failure: return early and log. Kick/ban only when the call is impossible for an honest client (e.g. selling 2 km from the shop) — see anticheat.md §8 for evidence thresholds.
+On failure: reject without mutation and record bounded/sampled evidence. Stale UI, desync and reconnect races can produce invalid calls; a distance mismatch alone is not proof for an automatic ban. See anticheat.md §8.
 
-## 3. Net events: secure template
-```lua
--- server/main.lua
-local cooldowns = {}
+## 3. Net events and mutation handlers
+Use the five checks above at the entry point. For a mutation flow, read the generated shop's server handler and `server/purchase.lua`: success, definitive failure and ambiguous results are distinct. A sell operation needs the same discipline in reverse: a successful item removal followed by an unchecked money grant can lose value.
 
-RegisterNetEvent('myres:server:sellItem', function(itemName, count)
-    local src = source
-    if type(itemName) ~= 'string' or type(count) ~= 'number' then return end
-    if count ~= count or count % 1 ~= 0 or count < 1 or count > 50 then return end
+The generic shop is disabled until its installed adapters, session lifecycle and durable operation/recovery path are integrated. No short pair of framework exports is presented as an atomic economy transaction. See [design-and-validation.md](design-and-validation.md).
 
-    local item = ServerConfig.SellItems[itemName]      -- whitelist + server-side price
-    if not item then return end
-
-    local now = GetGameTimer()
-    if (cooldowns[src] or 0) > now then return end
-    cooldowns[src] = now + 2000
-
-    local dist = #(GetEntityCoords(GetPlayerPed(src)) - ServerConfig.SellPoint)
-    if dist > 5.0 then
-        Log.warn('sell-distance', src, { dist = dist, item = itemName })
-        return
-    end
-
-    if not Bridge.RemoveItem(src, itemName, count) then return end   -- take first, grant after
-    Bridge.AddMoney(src, 'cash', item.price * count, 'myres-sell')
-end)
-
-AddEventHandler('playerDropped', function()
-    cooldowns[source] = nil
-end)
-```
 Rules:
-- Names `resource:side:action`; never generic names (`giveMoney`) that menus brute-force.
+- Namespace event names for clarity. Names, obscurity and client-held tokens are not access controls; every reachable mutation must validate its operation contract.
 - `RegisterNetEvent` only for events that must cross the network. Internal events: `AddEventHandler` (not network-callable).
 - `RegisterNetEvent` does not block same-side calls. A client-side handler meant only for the server can check `if source ~= 65535 then return end` (server-originated events arrive with source 65535) — docs call client-side checks "not bullet proof".
 - Send **intent** (`itemName`, `count`), never `price`, `reward`, `coords`, `job`.
@@ -106,18 +80,8 @@ end)
 
 ## 5. Economy and duplication (dupes)
 - Use framework / ox_inventory **server** APIs only; check every return value (`exports.ox_inventory:RemoveItem` returns success).
-- **No yield between check and mutations.** Check (`CanCarryItem`, balance) and perform both mutations in one uninterrupted block: ox_inventory's own shops check `canAfford`, add the item, then remove the currency with no `Wait`/await in between (`modules/shops/server.lua`). If anything in between yields (DB await, callback), **take/verify first, grant after**, and refund or abort atomically on failure (or use one atomic SQL statement `... AND balance >= ?`). Always `CanCarryItem` before `AddItem`.
-- **Per-player lock** across yields: dupes happen when two requests interleave around a `Wait`/DB await or when the player disconnects mid-action.
-```lua
-local busy = {}
-local function withLock(src, fn)
-    if busy[src] then return false end
-    busy[src] = true
-    local ok, res = pcall(fn)
-    busy[src] = nil
-    return ok and res
-end
-```
+- **Verify interleaving, not only visible Wait calls.** Exports and hooks can yield internally. Check the installed contracts; serialize conflicting operations through the data owner. A pre-check such as `CanCarryItem` does not reserve capacity. Revalidate after yields, check every mutation and compensation return, and reconcile ambiguous results.
+- **Locks need identity and ownership.** Key economic operations by stable character/account identity and bind them to a session generation. A late callback may only clear its own operation token. Resource-local locks cannot protect writes by other resources or processes. Do not release a lock on disconnect while the old operation is still settling.
 - Multi-row DB changes in one transaction (`MySQL.transaction.await` / `MySQL.startTransaction`), never two separate awaits that can half-succeed.
 - Shops: prices from server config; validate shop exists, distance, job/licence.
 - Minigames/jobs: server decides outcome or validates elapsed time (reject completions faster than physically possible).
@@ -125,23 +89,13 @@ end
 - Log every economic mutation (license, amount, reason, resource).
 - **Bound before you multiply.** Lua 5.4 integer arithmetic wraps silently on overflow (no error, no clamp), so `price * qty` with a huge integer `qty` can become negative and pass a `balance < total` check. Cap every client-influenced operand first (`qty <= MAX_QTY`, `math.type(qty) == 'integer'`), then sanity-check the result (`total > 0 and total <= MAX_TX`). Modern ESX/QBCore reject non-positive amounts, but custom accounts and bridges often don't. Source: Lua 5.4 manual 3.4.1.
 - **Clamping is not validation for privileged quantities.** A client may report *that* something finished, never *how much*. If a payout depends on a quantity (damage repaired, distance driven, items found), the server must have observed or recorded it. Pattern: on `start`, store `pending[src] = { startedAt = os.time(), netId = netId, before = <server-read value> }`; on `complete`, take `pending[src]` (nil -> reject), set it to `nil` immediately (single use, blocks replays), reject if the elapsed time is below the minimum, re-check distance, compute the payout from the stored record plus `ServerConfig`, and clear `pending[src]` on `playerDropped`.
-- **Idempotent endpoints:** for retries/double clicks, accept a client request id (intent only), keep a bounded per-player set of processed ids, and return the earlier result instead of re-applying.
-- **Idempotency ledger for high-value grants** (heist payouts, job/mission rewards, vehicle purchases, cross-resource transfers). The server issues the operation id when the activity starts (e.g. `heist:<netId>:<startTime>`, or a random token stored server-side). Never derive it from `os.time()` at payout time, and never accept one from the client. Claim it atomically before granting:
-  ```lua
-  -- table: CREATE TABLE IF NOT EXISTS op_ledger (op_id VARCHAR(64) PRIMARY KEY, charid VARCHAR(64) NOT NULL,
-  --   action VARCHAR(32) NOT NULL, status ENUM('PENDING','DONE','FAILED') NOT NULL DEFAULT 'PENDING',
-  --   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, KEY (status))
-  local claimed = MySQL.update.await('INSERT IGNORE INTO op_ledger (op_id, charid, action) VALUES (?, ?, ?)', { opId, charid, action })
-  if claimed ~= 1 then return false end                 -- replay or duplicate: already processed
-  local ok = exports.ox_inventory:AddItem(src, item, count)
-  MySQL.update.await('UPDATE op_ledger SET status = ? WHERE op_id = ?', { ok and 'DONE' or 'FAILED', opId })
-  ```
-  On boot, list rows still `PENDING` and **reconcile** them: check the inventory or account and finish or void each one by hand or by script. Do not re-grant blindly.
-- **No blind retries of grants.** Retrying a whole DB transaction after a deadlock is safe, because oxmysql rolled it back. Retrying `AddMoney`/`AddItem` after a timeout or an ambiguous result can double-grant; check the ledger or inventory state first. A conditional UPDATE matching 0 rows does not roll back a `MySQL.transaction` batch (database-oxmysql.md section 7.1).
+- **Retry identity is not permission.** Bind a request key to actor, action and normalized payload. In-memory deduplication is bounded but does not survive restart. Use stable activity IDs for one server-authorized reward; a reused network ID or second-resolution timestamp alone is not sufficient uniqueness.
+- **Ledger plus export is not atomic.** Recording PENDING, calling an inventory/framework export, then recording DONE leaves a crash window. Require owner-supported idempotency/receipts or a recovery design that can establish whether that operation applied. Unknown outcomes must not become FAILED merely because no success response arrived.
+- **Retry only with evidence.** A confirmed rolled-back, DB-only transaction may be retried with bounded attempts if its whole operation is safe to repeat. Generic driver `false`, connection loss or timeout does not necessarily prove rollback. Never retry an external grant blindly. See [security-validation.md](security-validation.md) for the operation states and adversarial matrix; a zero-row UPDATE does not automatically roll back a batch transaction.
 
 ## 6. Entities, state bags, request control, teleport
 - **State bags:** by default players can write their own player bag and owned-entity bags. `setr sv_stateBagStrictMode true` makes the server the only writer of replicated keys (FXServer commit 2024-10-19; ox_lib ≥ 3.37 prints a startup warning when it is off; silence with `set ox:ignoreSecurityAdvisory ["stateBagStrictMode"]`, auto-silenced when qb-core is running). Even with strict mode, never read money/permissions from bags a client could influence; keep authority in server tables.
-- Server-side guard for non-strict servers: `AddStateBagChangeHandler(key, nil, function(bagName, key, value, _, replicated) ... end)` — when `replicated` is true and the change came from a client, revert or ignore it (the server is the authority).
+- Server-side guard for non-strict servers: `AddStateBagChangeHandler(key, nil, function(bagName, key, value, _, replicated) ... end)` — `replicated` describes replication intent, not authenticated authorship. Validate against server-owned state; the callback cannot reject the original change. Do not treat a parameter-presence check as an authorization guard.
 - **Entity lockdown:** `set sv_entityLockdown strict` (no client-created networked entities) or `relaxed` (blocks only script-created ones); per bucket `SetRoutingBucketEntityLockdownMode(bucket, 'strict')`. FXServer source also accepts `no_dummy`; docs list `full` (Enhanced only). Spawn server-side: `CreateVehicleServerSetter`, `CreatePed`, `CreateObjectNoOffset`.
 - `sv_filterRequestControl` blocks `REQUEST_CONTROL_EVENT` routing: 0 off (default in source), 1 player-controlled *settled* entities, 2 any player-controlled entity, 3 = 2 + settled non-player entities, 4 no routing at all; -1 behaves like 2 with a console warning. Settle timer: `sv_filterRequestControlSettleTimer` (ms, default 30000).
 - `sv_protectServerEntities true` (Legacy; replicated) blocks clients deleting server-created entities; on Enhanced lockdown replaces it.
@@ -205,6 +159,7 @@ local function allow(src, key, rate, burst)       -- rate = tokens per second
     if not perPlayer then perPlayer = {}; buckets[src] = perPlayer end
     local b = perPlayer[key]
     if not b then b = { tokens = burst, t = now }; perPlayer[key] = b end
+    if now < b.t then b.t = now end -- clock wrap/reset: do not create negative tokens
     b.tokens = math.min(burst, b.tokens + (now - b.t) / 1000 * rate)
     b.t = now
     if b.tokens < 1 then return false end
@@ -215,7 +170,8 @@ end
 AddEventHandler('playerDropped', function() buckets[source] = nil end)
 -- usage: if not allow(src, 'craft', 0.5, 3) then return end
 ```
-- Cap payloads: `#str <= 256`, table sizes, nesting depth before `json.encode`/DB writes.
+- Use fixed server-defined action keys/rates; never allocate limiter keys from arbitrary payloads. Bound in-flight work and total queues as well as per-player frequency; clean up session state on drop. The limiter above is process-local, not a durable replay defense.
+- Cap payloads: strings, collection counts, nesting depth and total work before `json.encode`/DB writes.
 - Large server→client payloads: `TriggerLatentClientEvent`.
 
 ## 11. Logging and Discord webhook hygiene
@@ -225,8 +181,11 @@ AddEventHandler('playerDropped', function() buckets[source] = nil end)
 ```lua
 local webhook = GetConvar('myres_webhook', '')
 local queue = {}
+local droppedAlerts = 0
 
 function Log.alert(title, description)
+    if webhook == '' then return end
+    if #queue >= 512 then droppedAlerts = droppedAlerts + 1; return end
     queue[#queue + 1] = { title = title:sub(1, 256), description = description:sub(1, 2000) }
 end
 
@@ -244,6 +203,7 @@ CreateThread(function()
     end
 end)
 ```
+- The example alert queue is bounded, best-effort and memory-only; expose its dropped-alert counter to monitoring. Keep required economic recovery/audit records in durable storage, separately from notifications.
 - Screenshots: `screenshot-basic`'s client `requestScreenshotUpload(url, field, cb)` uploads **from the player's client**, exposing the URL/API key to every player. Capture with the server-side `requestClientScreenshot` (or screencapture) and upload from the server; gate captures by ACE + rate limit.
 - Discord-role whitelists/permissions: resolve roles server-side from the `discord:` identifier, cache with a TTL, and **fail closed** on API errors/429 (`if not ok then return false end`). A bot token ever set with `setr` or committed to Git is compromised: regenerate it, don't just move it.
 - One webhook per channel/purpose; delete and recreate a webhook if it ever leaked (anyone with the URL can post).
@@ -310,7 +270,7 @@ end)
 ## 17. Review checklist
 - [ ] Every server `RegisterNetEvent`/callback captures `source` and validates identity, permission, distance, arguments and rate.
 - [ ] No price, amount, reward, coordinates or item name trusted from the client without a server whitelist.
-- [ ] No yield between check and mutations (else take/verify first, refund on failure), per-player locks, DB transactions and an idempotency ledger for multi-step or high-value economy.
+- [ ] Yield/return contracts verified, conflicting operations serialized by their owner, session tokens rechecked, every mutation/compensation result handled, durable operation recovery where needed.
 - [ ] Sensitive server exports check `GetInvokingResource()`.
 - [ ] Placeholders only in SQL (Lua and JS).
 - [ ] No secrets/webhooks in client/shared files or `setr`/`sets`.

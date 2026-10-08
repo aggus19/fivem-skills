@@ -7,5 +7,8 @@
   "cannot_carry": "You can't carry that",
   "too_far": "You are too far from the shop",
   "invalid": "Invalid request",
-  "cooldown": "Slow down"
+  "cooldown": "Slow down",
+  "unavailable": "Shop unavailable.",
+  "busy": "A purchase is already in progress.",
+  "recovery_required": "Your purchase needs review. Please contact staff."
 }

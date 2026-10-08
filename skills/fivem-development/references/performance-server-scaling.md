@@ -20,6 +20,7 @@ Labels: **[source]** = read in FiveM source code; **[docs]** = official Cfx.re d
 13. Sources
 
 ## 1. How FXServer spends its time
+Warning thresholds below describe the reviewed Legacy source, not a latency objective. Timer interval and execution time are different measurements. Use [hitch-diagnostics.md](hitch-diagnostics.md) to establish cause and match the deployed artifact/edition.
 | Thread | Timer **[source]** | Hitch warning | What runs there |
 |---|---|---|---|
 | svMain | 20 Hz (50 ms) | > 150 ms "server thread hitch warning" | All server scripts (Lua/JS/C#), events, resource ticks |
@@ -93,7 +94,7 @@ Official minimum **[docs, fivem.net/server-hosting]**: "x86-64 system running Li
 
 - Priority order: single-thread speed > dedicated cores (no noisy neighbours / CPU steal) > RAM > NVMe for MySQL/MariaDB > network.
 - Avoid low-clock many-core server CPUs and oversold VPS vCPUs for the game server; they are fine for the database or web panels **[community]**.
-- Put MySQL/MariaDB on fast NVMe with enough buffer pool; a slow DB shows up as svMain stalls only if you `await` in hot paths — see `database-optimization.md`.
+- Put MySQL/MariaDB on fast NVMe with enough buffer pool; `await` yields the calling coroutine; it does not block svMain for the full query duration. Slow queries increase request latency and queued work; serialization and resumed script work can still cause hitches — see `database-optimization.md`.
 - Load-test with your actual resource set; resource code matters more than hardware.
 
 ## 7. Linux vs Windows, artifacts
@@ -122,18 +123,18 @@ Server warnings when a resource starts **[source, `ResourceStreamComponent.cpp`]
 ## 9. Standard server values
 | Item | Good value | Reasoning |
 |---|---|---|
-| svMain tick p95 | < 10 ms | 50 ms budget; leaves room for spikes |
-| Any hitch | none in normal play | > 150 ms = everyone lags |
-| Server periodic loops | ≥ 1 s, staggered offsets | avoid all resources working on the same tick |
-| Player save | every 5–15 min + on drop + on txAdmin shutdown | DB load vs data loss |
-| Entity cleanup sweep | every 5–10 min | despawn abandoned vehicles/props |
+| svMain timing | Workload-specific execution/interval budget with headroom | Track p95/p99 and tail stalls; distinguish metric definitions |
+| Hitch warnings | Investigate recurring stalls during representative play | Severity depends on interval, frequency and affected subsystem |
+| Server periodic loops | Rate required by the mechanic, bounded and staggered | Avoid synchronized bursts while preserving responsiveness |
+| Player save | Data-owner policy and explicit recovery-point objective | Economy durability cannot depend only on disconnect/shutdown hooks |
+| Entity cleanup | Ownership-aware lifecycle plus bounded fallback sweep | Never delete an active/persistent entity solely to lower a count |
 | `onesync_population` | false for RP with scripted NPCs; true with lowered density otherwise | population is the largest sync load |
 | `sv_entityLockdown` | `relaxed` or `strict` when all spawns are server-side | stops client entity spam |
 | Enhanced `sv_syncTickRate` | 60; 90–120 only if svSync has headroom | latency vs CPU |
 | Culling radius | default 424 | culling natives deprecated |
 | Asset size | ≤ 16 MiB physical and virtual each | warning threshold |
 | Vehicle textures | ≤ 1024 px | client mip-limits above that |
-| Scheduled restarts | 1–4 per day | clears leaks, entity build-up **[community]** |
+| Scheduled restarts | Operational schedule based on measured behavior | Restarting does not resolve a leak or guarantee pending saves |
 
 ## 10. Restart strategy and operations
 - txAdmin scheduled restarts with in-game warnings; listen to `txAdmin:events:scheduledRestart` / `txAdmin:events:serverShuttingDown` to flush saves ([server-ops.md](server-ops.md)).
@@ -143,18 +144,18 @@ Server warnings when a resource starts **[source, `ResourceStreamComponent.cpp`]
 - Stage changes: copy of the server + bots/players, profiler capture before/after, then deploy.
 
 ## 11. Practices from large servers (labelled)
-- Interactions through ox_target / zones; no resource with an always-on `Wait(0)` loop **[community consensus, ox_lib design]**.
+- Use the installed interaction/zone system where suitable. Per-frame drawing/control work may require `Wait(0)` while active; replace unnecessary polling, not required behavior.
 - One "population/density" resource for the whole server; NPC-heavy jobs spawn server-side on demand and despawn.
 - Instances (housing, heists) in routing buckets with population disabled.
 - Phone/inventory/HUD NUIs hidden when closed; HUD updates on change at ≤ 10 Hz.
-- Database on its own NVMe-backed host or managed instance for 300+ players; read-heavy data cached in memory at start **[community]**.
+- Evaluate DB isolation from actual contention, workload and network latency, not a fixed player threshold. Cache only with an ownership/invalidation policy.
 - Voice: pma-voice/Mumble settings (grid/range) affect bandwidth; test at target population **[community]** **UNVERIFIED magnitudes**.
 - Avoid escrowed resources you can't profile/fix when they show in resmon; ask the vendor for numbers.
 - No reliable public case studies with measured numbers for 1000+ player FiveM servers were found; treat any "X players on Y hardware" claim as anecdotal.
 
 ## 12. Scaling checklist
 - [ ] Recommended artifact; staging on Latest.
-- [ ] svMain p95 < 10 ms, no hitch warnings at peak (txAdmin chart).
+- [ ] Representative workload meets its execution/latency budget; recurring hitch causes investigated with correlated evidence.
 - [ ] Population strategy decided (convar / one density resource / buckets).
 - [ ] `sv_entityLockdown` set; all gameplay entities created server-side and tracked.
 - [ ] No broadcast > a few KB; GlobalState small; latent events for big data.
