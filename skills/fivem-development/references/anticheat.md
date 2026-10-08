@@ -15,7 +15,7 @@ Baseline: FXServer Legacy 35245 / Latest 37150 (OneSync forced on), game-event s
 10. Sources
 
 ## 1. Principles
-- **Prevention beats detection.** Most "anticheat" wins come from secure resources ([security.md](security.md) §2–§6): server-authoritative economy, `sv_entityLockdown strict`, `sv_stateBagStrictMode true`, `sv_filterRequestControl`, `sv_scriptHookAllowed false`, `sv_pureLevel 1/2`.
+- **Prevention beats detection.** Most "anticheat" wins come from secure resources ([security.md](security.md) §2–§6): server-authoritative economy, `sv_entityLockdown relaxed` (`strict` only when every entity is server-created; see convars-and-commands.md), `sv_stateBagStrictMode true`, `sv_filterRequestControl`, `sv_scriptHookAllowed false`, `sv_pureLevel 1/2`.
 - **Server-side only for decisions.** Client-side checks are trivially disabled by executors; use them as signals at most.
 - **Cancel, then log, then judge.** Cancelling a bad game event protects players instantly; bans need evidence and human review except for zero-false-positive signals (honeypots, impossible values).
 - **Measure false positives first.** Desync, lag spikes, teleports by your own scripts, respawns, routing-bucket changes and vehicles all look like cheats to naïve checks.
@@ -154,7 +154,7 @@ end)
 ```
 Notes:
 - Build `blacklistedModels` with backtick hashes / `joaat('name')`; build explosion/projectile allow-lists from log data (vehicles exploding, fire extinguishers, fireworks and your own scripts produce legitimate events).
-- Under `sv_entityLockdown strict` client spawning is already blocked; `entityCreating` then mainly guards population and server-side spawns from other resources.
+- Under `sv_entityLockdown strict` (all entities server-created) client spawning is already blocked; `entityCreating` then mainly guards population and server-side spawns from other resources.
 - `NetworkGetFirstEntityOwner` returns the first owner ID (docs) — treat non-positive values as server/population.
 - Don't do heavy work (DB calls, `Wait`) inside these handlers — they run on the sync path; queue logging.
 - Known gaps: objects created by **scenarios** (e.g. `WORLD_HUMAN_CONST_DRILL`) replicate without firing `entityCreating`/`entityCreated` (citizenfx/fivem#3675, open), so lockdown/`entityCreating` filters don't see them; consider `block_net_game_event` for scenario abuse and watch object counts. Undisclosed client crash methods are reported regularly (#3722): stay on the Recommended artifact and update promptly.

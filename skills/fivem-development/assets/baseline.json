@@ -1,0 +1,27 @@
+{
+  "verified": "2026-10-07",
+  "source": "references/versions.md (single source of truth for prose; keep both in sync)",
+  "platform": {
+    "fxserver_recommended": 35245,
+    "fxserver_latest": 37150,
+    "fxserver_join_cutoff": "2026-10-15",
+    "game_build": 3889,
+    "txadmin": "8.1.1",
+    "fx_version": "cerulean"
+  },
+  "resources": {
+    "ox_lib": {"baseline": "3.40.0", "min_safe": null, "notes": "npm @overextended/ox_lib 3.40.0"},
+    "oxmysql": {"baseline": "2.14.3", "min_safe": "2.14.0", "advisory": "2.14.0 fixes a SQL injection in the sqlstring dependency"},
+    "ox_inventory": {"baseline": "2.48.0", "min_safe": "2.47.6", "advisory": "dupe fixes in 2.46.0, 2.46.1, 2.47.0 and 2.47.6"},
+    "ox_target": {"baseline": "1.18.1", "min_safe": null},
+    "ox_core": {"baseline": "1.5.14", "min_safe": null},
+    "ox_doorlock": {"baseline": "1.22.1", "min_safe": null},
+    "ox_fuel": {"baseline": "1.5.4", "min_safe": null, "advisory": "server trusts the client fuel price in every version: patch it (ox-resources-misc.md)"},
+    "qbx_core": {"baseline": "1.24.0", "min_safe": null},
+    "es_extended": {"baseline": "1.15.2", "min_safe": null, "notes": "removeAccountMoney can go negative; accounts with round=true round after the > 0 check"},
+    "qb-core": {"baseline": "1.3.0", "min_safe": null, "notes": "manifest version is stale upstream; compare the 2026-05 refactor markers instead"},
+    "pma-voice": {"baseline": "7.0.1", "min_safe": null},
+    "screencapture": {"baseline": "0.17.2", "min_safe": null},
+    "bob74_ipl": {"baseline": "2.7.1", "min_safe": null}
+  }
+}

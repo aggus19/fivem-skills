@@ -40,7 +40,7 @@ Other core resources (multicharacter, identity, skin, menus, notify, textui, pro
 | 1.10 | 2023-07 | MultiSpawns, `Config.AdminGroups`, Discord admin logs, `esx:spawnVehicle` event, `ESX.GetAccount` (client); **removed** `xPlayer.updateCoords` |
 | 1.10.1 | 2023-07 | **Removed** client `esx:removeWeapon` event: use `xPlayer.removeWeapon` |
 | 1.10.2 | 2023-09 | Health/armour saved in metadata, `ESX.GetNumPlayers`, metadata sub-values, stops incompatible resources (essentialmode, …) |
-| 1.10.3 | 2024-01 | **Requires artifact ≥ 6188** (`GetPlayerIdentifierByType`), `ESX.Game.SpawnObject` without callback networking, underflow check in `removeAccountMoney` |
+| 1.10.3 | 2024-01 | **Requires artifact ≥ 6188** (`GetPlayerIdentifierByType`), `ESX.Game.SpawnObject` without callback networking, underflow check in `removeAccountMoney` (no balance floor: 1.15.2 still lets the balance go negative — check it first, §19) |
 | 1.10.6 | 2024-06 | `esx:setGroup` event, `ESX.PlayerData.vehicle/seat`, `ESX.ValidateType/AssertType`, `ESX.Math.Random`, `ESX.TriggerClientEvent` |
 | 1.10.8 | 2024-10 | **BREAKING:** metadata and `xPlayer.set` are no longer synced via state bags; client gets them through `esx:updatePlayerData`. Account names case-insensitive |
 | 1.11.0 | 2024-11 | **Requires FXServer ≥ 10188** (`SetEntityOrphanMode`). Job duty system, `ESX.SecureNetEvent`, `ESX.playerId`/`ESX.serverId`, GlobalState player count, orphan mode for vehicles, interaction system, multichar/skin/skinchanger rewrites, playtime tracking, spawnmanager dependency removed, routing buckets in multichar |
@@ -70,13 +70,14 @@ Hard requirements (checked in `server/main.lua`):
 - es_extended **stops** `essentialmode`, `es_admin2`, `basic-gamemode`, `mapmanager`, `fivem-map-*`, `qb-core`, `default_spawnpoint` on start.
 
 ```cfg
-# order from the official recipe server.cfg
+# official recipe order, with ox_lib moved before es_extended (oxmysql → ox_lib → esx_lib → es_extended)
 ensure chat
 ensure oxmysql
+ensure ox_lib
 ensure esx_lib          # before es_extended (es_extended's manifest loads @esx_lib/imports.lua)
 ensure es_extended
 ensure [core]           # esx_menu_*, esx_notify, esx_textui, esx_context, esx_progressbar, esx_identity, esx_skin, skinchanger, esx_multicharacter, cron, esx_inventory, esx_loadingscreen
-ensure [standalone]     # ox_lib, pma-voice, ...
+ensure [standalone]     # pma-voice, ... (ox_lib already started above)
 ensure [esx_addons]
 # es_extended needs these ACEs to manage principals for groups:
 add_ace resource.es_extended command.add_ace allow
@@ -84,7 +85,7 @@ add_ace resource.es_extended command.add_principal allow
 add_ace resource.es_extended command.remove_principal allow
 add_ace resource.es_extended command.stop allow
 ```
-With ox_inventory: `ensure ox_lib` → `oxmysql` → `esx_lib` → `es_extended` → `ox_inventory` (ox_inventory must start after the framework; ESX auto-detects it). Remove/disable `esx_inventory` (it errors when the default inventory is disabled).
+With ox_inventory: `ensure oxmysql` → `ox_lib` → `esx_lib` → `es_extended` → `ox_inventory` (ox_inventory must start after the framework; ESX auto-detects it). Remove/disable `esx_inventory` (it errors when the default inventory is disabled).
 
 ## 3. Config options and convars
 
@@ -446,7 +447,8 @@ end)
 
 - `removeAccountMoney`/`removeMoney` do not refuse insufficient balance → check `getAccount(name).money >= amount` first (dupe/negative-balance exploit class; fixed only in the unreleased 1.16 branch).
 - `addInventoryItem` ignores weight → `canCarryItem` first; `removeInventoryItem` returns false when short → check its return before giving rewards.
-- Money methods `error()` on amounts ≤ 0 → validate `type(n) == 'number' and n > 0 and n == math.floor(n)` before calling, or a malicious client can crash your handler mid-transaction.
+- Money methods `error()` on amounts ≤ 0 → validate `local n = math.tointeger(amount); if not n or n <= 0 or n > MAX_AMOUNT then return end` before calling (a `n == math.floor(n)` check accepts `math.huge`), or a malicious client can crash your handler mid-transaction.
+- Accounts with `round = true` round **after** the `> 0` check, so `0.4` passes and charges 0 → require integers, never fractional amounts.
 - Default-inventory pickups: no claim lock in 1.15.2 (pickup-dupe fixed in the 1.16 branch). Prefer ox_inventory on public servers.
 - Do not `RegisterNetEvent` framework-local events (`esx:playerLoaded`, `esx:setJob`, `esx:playerDropped`) on the server — use `AddEventHandler`, otherwise clients can trigger them.
 - Removing a key from `Config.CommandPermissions` opens that command to everyone (fallback group `user`).

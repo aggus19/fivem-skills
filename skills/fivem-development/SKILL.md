@@ -97,6 +97,7 @@ FXServer Legacy Recommended **35245** / Latest 37150 (clients can't join older b
 | Trigger/callback/export/command security, money/items, replay, failure and concurrency tests | [security-validation.md](references/security-validation.md) |
 | Anticheat design (game events, heartbeats, honeypots, bans) | [anticheat.md](references/anticheat.md) |
 | Auditing a resource / "is this safe?" / backdoors | [audit-checklist.md](references/audit-checklist.md) |
+| Auditing a whole server or resources folder: inventory, versions vs baseline, ensure/data_file checks, endpoint coverage ledger, economy exploit classes, report | [server-audit.md](references/server-audit.md) |
 | Performance: measuring, budgets, standard values | [performance.md](references/performance.md) |
 | Hitch warnings, slow actions, DB versus script/host latency, diagnostic experiments | [hitch-diagnostics.md](references/hitch-diagnostics.md) |
 | Before/after optimization recipes | [performance-cookbook.md](references/performance-cookbook.md) |
@@ -113,8 +114,10 @@ All in `scripts/`, Python 3.8+, standard library only; paths relative to this sk
 | `python scripts/natives.py show <NameOrHash>` | Exact signature(s), side, hash, docs link |
 | `python scripts/natives.py check <path> [--strict]` | Lexical Lua native names and manifest-declared sides; filename fallback/unknown side reported. No signature/control-flow/runtime proof |
 | `python scripts/build_natives_catalog.py [--out DIR] [--refresh]` | Regenerate `assets/natives/` (full catalogue) |
-| `python scripts/manifest.py <resource>` | Literal manifest vs resolved files/globs, NUI downloads and server-file exposure; dynamic manifests explicitly unsupported |
+| `python scripts/manifest.py <resource\|resources dir>` | Literal manifest vs resolved files/globs, `data_file` paths, NUI downloads and server-file exposure; a folder checks every resource below it; dynamic manifests explicitly unsupported |
 | `python scripts/audit.py <path> [--min high] [--json]` | Heuristic code/config/build-output scan; exit 1 on any high/critical regardless of display filter. Dependencies excluded; findings need review |
+| `python scripts/project.py <server\|resources dir> [--json] [--section S]` | Whole-server facts: cfg exec chain, convar conflicts, ensure vs folders, installed versions vs `assets/baseline.json` (with file:line), data_file and asset checks, git state; exit 1 on high |
+| `python scripts/surface.py <path> [--ledger FILE] [--shard K/N] [--json]` | Every client-reachable server entry point, the sinks it reaches (money, items, SQL, buckets, spawns...) and fixed risk tags; writes the coverage ledger; stable IDs |
 | `python scripts/rcon.py [--host H] [--port P] <command...>` | One RCON command over UDP (password from env `FIVEM_RCON_PASSWORD`, never argv; localhost unless `--allow-remote`) |
 | `python scripts/server_info.py [host:port] [--resource NAME] [--getinfo] [--json]` | Summarise `/info.json`, `/players.json`, `/dynamic.json`; check a resource is started |
 | `python scripts/scaffold.py <name> [--out DIR] [--nui] [--profile minimal\|ox-shop]` | Default: dependency-free Lua; optional NUI. Explicit ox-shop profile: ox stack + bridge/economy integration example |
@@ -142,7 +145,19 @@ Templates: `assets/templates/resource-minimal/` (dependency-free default), `reso
 4. Re-run `natives.py check`, `manifest.py`, `audit.py` on the touched resource.
 
 ### Audit a resource
-Follow [audit-checklist.md](references/audit-checklist.md): `audit.py`, `natives.py check --strict`, `manifest.py`, then confirm each finding in the code. For protected state, trace entry points to sinks and test relevant cases in security-validation.md. Report file:line, severity, fix and coverage limits. Never call obfuscated or escrowed code "safe". If a backdoor is found, list credentials to rotate.
+Follow [audit-checklist.md](references/audit-checklist.md) §1 (its order is canonical): `manifest.py`, `audit.py --json`, `surface.py --ledger`, `natives.py check --strict`; confirm or dismiss every Backdoor/SQL/Trust-boundary hit and review every ledger row. For protected state, test relevant cases in security-validation.md. Report file:line, severity, fix and coverage. Never call obfuscated or escrowed code "safe". If a backdoor is found, list credentials to rotate.
+
+### Audit a server (more than one resource)
+Follow [server-audit.md](references/server-audit.md). Enumerate with tools, never by sampling:
+```
+- [ ] 1. Scope: path, git HEAD, uncommitted changes; provenance unknown = record and continue
+- [ ] 2. python scripts/project.py <server>                 -> versions/ensure/cfg/data_file/assets/repo facts (cite file:line)
+- [ ] 3. python scripts/audit.py <resources> --json          -> triage every Backdoor/SQL/Trust-boundary hit (server-audit.md §4, §10)
+- [ ] 4. python scripts/surface.py <resources> --ledger L.md  -> review EVERY row (audit-checklist §6 1-13 + server-audit §8); --shard K/N for parallel reviewers
+- [ ] 5. python scripts/manifest.py <resources>; natives.py check on the owner's own resources
+- [ ] 6. Static performance review (unmeasured unless profiled)
+- [ ] 7. Report with the server-audit.md §11 template: coverage counts, no TODO rows, or mark PARTIAL
+```
 
 ### Convert between frameworks
 Map calls through the actual owner/bridge contract; verify installed target APIs (QBCore → Qbox: [framework-qbox.md §16](references/framework-qbox.md)). Preserve compatible UI/target dependencies unless the requested migration requires their replacement. Verify inventory support; the baseline ox_inventory does not support QBCore.

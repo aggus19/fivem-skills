@@ -1,6 +1,6 @@
 # Other frameworks: ND_Core, vRP family, standalone
 
-Baseline verified 2026-10-07 from source and official docs. Qbox, ESX Legacy and ox_core have their own files ([framework-qbox.md](framework-qbox.md), [framework-esx.md](framework-esx.md), [ox-inventory-target.md](ox-inventory-target.md)); QBCore is in [framework-qbcore.md](framework-qbcore.md). Community resources (voice, phones, appearance, banking, admin menus...) moved to [ecosystem-resources.md](ecosystem-resources.md).
+Baseline verified 2026-10-07 from source and official docs. Qbox, ESX Legacy and ox_core have their own files ([framework-qbox.md](framework-qbox.md), [framework-esx.md](framework-esx.md), [ox-core.md](ox-core.md)); QBCore is in [framework-qbcore.md](framework-qbcore.md). Community resources (voice, phones, appearance, banking, admin menus...) moved to [ecosystem-resources.md](ecosystem-resources.md).
 
 ## Contents
 1. Landscape in 2026 (which framework is what)
@@ -18,7 +18,7 @@ Sources
 | Qbox (qbx_core) | Qbox-project/qbx_core v1.24.0 (2026-08-22), very active | QBCore-compatible, ox-based — see framework-qbox.md |
 | ESX Legacy | esx-framework/esx_core 1.15.2, active (push 2026-10-07) | see framework-esx.md |
 | QBCore | qbcore-fivem/qb-core 1.3.0, maintained (big refactor 2026-05) | see framework-qbcore.md |
-| ox_core | overextended/ox_core 1.5.14, active | see ox-inventory-target.md |
+| ox_core | overextended/ox_core 1.5.14, active | see [ox-core.md](ox-core.md) |
 | **ND_Core** | ND-Framework/ND_Core **v2.3.2 release (2025-02-22)**; `main` has unreleased commits up to **2026-03-20** | small, ox_lib/ox_inventory based |
 | **vRP (classic)** | vRP-framework/vRP, last push 2025-05-15, last release "1.0" (2018) | vRP 2 on `master`; effectively unmaintained |
 | **vRP Creative / vRPEX** | not on GitHub as a canonical repo; sold/shared in Brazilian communities | vRP 1-style API, every distribution differs |

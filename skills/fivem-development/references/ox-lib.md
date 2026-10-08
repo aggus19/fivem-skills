@@ -35,7 +35,7 @@ Repo: https://github.com/overextended/ox_lib · Docs: https://overextended.dev/d
 1. Download the **release zip** (`https://github.com/overextended/ox_lib/releases/latest/download/ox_lib.zip`). The green "Code → Download ZIP" has no built UI, and ox_lib then errors with "Unable to load UI. Build ox_lib or download the latest release." To build from source instead: `cd web && bun i && bun run build`.
 2. In server.cfg:
 ```cfg
-ensure ox_lib                 # before every resource that uses it (and after oxmysql if you order by dependency)
+ensure ox_lib                 # after oxmysql, before every resource that uses it (frameworks included)
 
 add_ace resource.ox_lib command.add_ace allow
 add_ace resource.ox_lib command.remove_ace allow

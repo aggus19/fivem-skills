@@ -48,7 +48,7 @@ ensure ox_inventory
 | `ox:characterSelect` | `1` | setr | built-in character registration/selection |
 | `ox:spawnLocation` | `[-258.211, -293.077, 21.6132, 206.0]` | setr | spawn for new characters (x, y, z, heading) |
 | `ox:createDefaultAccount` | `1` | set | create a personal bank account for new characters (source only; not in docs) |
-| `sv_protectServerEntities` | `false` | set | read by ox_core to decide vehicle cleanup strategy |
+| `sv_protectServerEntities` | `false` | setr | read by ox_core to decide vehicle cleanup strategy |
 
 ## 3. Using ox_core from Lua and TypeScript
 ```lua

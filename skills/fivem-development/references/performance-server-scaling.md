@@ -60,7 +60,7 @@ Defaults verified in `ServerGameState.cpp` / docs. Change only with measurements
 | `sv_ioThreads` (Enhanced) | 0 = cores clamped 2–4 | Network I/O threads, startup only |
 | `sv_pingIntervalMilliseconds` (Enhanced) | 5000 | Keep-alive; lower = more bandwidth |
 | `onesync_migrateDataTimeout` (Enhanced) | 10000 ms | Force migration after owner stops sending |
-| `sv_entityLockdown` | inactive | `strict`/`relaxed` stop client-created entity spam (security + entity count) |
+| `sv_entityLockdown` | inactive | `relaxed` stops client script-entity spam; `strict` only when every entity (population included) is server-created - see convars-and-commands.md |
 | `sv_filterRequestControl` | 0 | Filter `REQUEST_CONTROL_EVENT` routing |
 | `sv_enableNetworkedSounds` | true | Set false to stop clients routing `NETWORK_PLAY_SOUND_EVENT` |
 | `sv_netEventReassemblyMaxPendingEvents` | 100 | Per-client pending large events (memory) |

@@ -9,9 +9,9 @@ Skill para agentes de IA (Claude Code, OpenAI Codex, Cursor y otras herramientas
 | Área | Contenido |
 |---|---|
 | **SKILL.md** | Reglas no negociables (autoridad del servidor, no inventar natives, detectar el stack, APIs actuales, presupuesto de rendimiento, licencias), tabla de ruteo a referencias y flujos de trabajo (crear, modificar, auditar, convertir, optimizar). |
-| **53 referencias** | **Plataforma:** versiones y línea de tiempo de cambios · server.cfg/instalación/ACE · todas las convars y comandos con valores recomendados · txAdmin completo · OneSync/entidades/state bags/routing buckets · GTA V Enhanced. **Scripting:** fxmanifest (todas las directivas) · runtimes CfxLua 5.4.8/JS/TS/C# · todos los eventos nativos · guía de natives + 699 natives esenciales verificadas · NUI/DUI · tooling · debugging. **ox:** ox_lib completo en 6 archivos (UI, core, world, utilidades, JS) · oxmysql · optimización de bases de datos (MariaDB/MySQL, índices, my.cnf, backups) · ox_inventory · ox_target · ox_core · ox_doorlock/ox_fuel. **Frameworks:** Qbox + ecosistema qbx · ESX Legacy 1.15.2 + ecosistema · QBCore (refactor 2026) · ND/vRP · bridge multi-framework · recursos de la comunidad por categoría. **Gameplay:** patrones · diseño de sistemas RP · vehículos y handling · mapeo/streaming/ropa. **Calidad:** qué usar vs qué evitar · seguridad · anticheat · checklist de auditoría · rendimiento + cookbook + escalado de servidores grandes · licencias (PLA 2026‑09‑10). |
+| **53 referencias** | **Plataforma:** versiones y línea de tiempo de cambios · server.cfg/instalación/ACE · todas las convars y comandos con valores recomendados · txAdmin completo · OneSync/entidades/state bags/routing buckets · GTA V Enhanced. **Scripting:** fxmanifest (todas las directivas) · runtimes CfxLua 5.4.8/JS/TS/C# · todos los eventos nativos · guía de natives + 699 natives esenciales verificadas · NUI/DUI · tooling · debugging. **ox:** ox_lib completo en 6 archivos (UI, core, world, utilidades, JS) · oxmysql · optimización de bases de datos (MariaDB/MySQL, índices, my.cnf, backups) · ox_inventory · ox_target · ox_core · ox_doorlock/ox_fuel. **Frameworks:** Qbox + ecosistema qbx · ESX Legacy 1.15.2 + ecosistema · QBCore (refactor 2026) · ND/vRP · bridge multi-framework · recursos de la comunidad por categoría. **Gameplay:** patrones · diseño de sistemas RP · vehículos y handling · mapeo/streaming/ropa. **Calidad:** qué usar vs qué evitar · seguridad · anticheat · checklist de auditoría · auditoría de servidor completo (inventario, cobertura, clases de exploit) · rendimiento + cookbook + escalado de servidores grandes · licencias (PLA 2026‑09‑10). |
 | **Catálogo de natives** | `assets/natives/`: las **7.379** natives (6.436 GTA + 943 CFX) en 47 archivos por namespace, con firma Lua, lado, hash, build mínimo, nombres viejos y link a docs. Regenerable con `build_natives_catalog.py`. |
-| **7 comandos + helper compartido** (Python 3.8+, sin dependencias): `rcon.py` y `server_info.py` para probar recursos contra un servidor; ver más abajo. Los otros 5: | `natives.py` (busca/verifica natives, incluye nombres viejos, detecta natives inventadas y del lado equivocado) · `build_natives_catalog.py` (regenera el catálogo) · `manifest.py` (valida fxmanifest) · `audit.py` (backdoors conocidos, SQLi, confianza en el cliente, XSS en NUI, webhooks expuestos, `.cfg` inseguros, loops sin Wait, APIs obsoletas) · `scaffold.py` (genera recursos). |
+| **9 comandos + helper compartido** (Python 3.8+, sin dependencias; helper `resource_files.py`): `rcon.py` y `server_info.py` para probar recursos contra un servidor; ver más abajo. Los otros 7: | `natives.py` (busca/verifica natives, incluye nombres viejos, detecta natives inventadas y del lado equivocado) · `build_natives_catalog.py` (regenera el catálogo) · `manifest.py` (valida fxmanifest) · `audit.py` (backdoors conocidos, SQLi, confianza en el cliente, XSS en NUI, webhooks expuestos, `.cfg` inseguros, loops sin Wait, APIs obsoletas) · `scaffold.py` (genera recursos) · `project.py` (inventario del servidor: cadena de `exec` de los cfg, `ensure` vs carpetas, versiones instaladas vs `assets/baseline.json`, estado de git, chequeos de assets y `data_file`) · `surface.py` (puntos de entrada del servidor alcanzables desde el cliente, con sinks y etiquetas de riesgo; escribe un registro de cobertura). |
 | **Plantillas** | Lua mínimo sin dependencias por defecto; perfil opcional `ox-shop` con *bridge* que autodetecta Qbox / ESX / QBCore / standalone + ejemplo de tienda con compensaciones comprobadas (compras desactivadas hasta integrar recuperación persistente) · NUI React 19 + Vite 8 + TypeScript 7 con target `chrome103` (CEF de FiveM Legacy). |
 | **Configs** | `.luarc.json` (LuaLS + addon FiveM), `selene.toml` + std `cfx.yml`, `.stylua.toml`, `server.cfg.example`, workflow de GitHub Actions. |
 | **Plugin de Claude Code** | Comandos `/fivem-new`, `/fivem-audit`, `/fivem-native` y el subagente `fivem-auditor`. |
@@ -82,6 +82,8 @@ python scripts/natives.py show GetEntityCoords          # firma exacta cliente y
 python scripts/natives.py check ../../mi_recurso --strict
 python scripts/manifest.py ../../mi_recurso
 python scripts/audit.py ../../resources --min medium
+python scripts/project.py ../..                          # inventario del server: versiones, ensure, cfg, data_file, assets, git
+python scripts/surface.py ../../resources --ledger ledger.md   # todos los endpoints con sinks + registro de cobertura
 python scripts/scaffold.py mi_recurso --out "../../resources/[custom]"
 python scripts/scaffold.py mi_tienda --profile ox-shop --out "../../resources/[custom]" --nui
 ```
@@ -93,7 +95,7 @@ FiveM Skills/
 ├── skills/fivem-development/
 │   ├── SKILL.md
 │   ├── references/        53 documentos
-│   ├── scripts/           natives.py · build_natives_catalog.py · manifest.py · audit.py · scaffold.py
+│   ├── scripts/           natives.py · build_natives_catalog.py · manifest.py · audit.py · scaffold.py · rcon.py · server_info.py · project.py · surface.py · resource_files.py (helper)
 │   └── assets/
 │       ├── natives/       catálogo completo (47 archivos por namespace)
 │       ├── templates/     resource-minimal/ · resource-lua/ · nui-react-vite/
@@ -129,7 +131,7 @@ La suite básica no descarga dependencias. La compilación opcional usa Bun 1.4.
 `audit.py --min` filtra la presentación: un hallazgo high/critical oculto sigue devolviendo error. El escáner incluye código compilado, pero excluye node_modules; no certifica dependencias. Los manifiestos calculados se reportan como no analizables; nunca se ejecutan para validarlos.
 
 ## Mantenimiento
-Las versiones envejecen. Para actualizar el baseline: seguí la sección "How to re-verify" de `references/versions.md`, actualizá las tablas y `metadata.baseline-date` en `SKILL.md`, corré los tests y anotá los cambios en `CHANGELOG.md`.
+Las versiones envejecen. Para actualizar el baseline: seguí la sección "How to re-verify" de `references/versions.md`, actualizá las tablas y `assets/baseline.json` (debe coincidir con `versions.md`), `metadata.baseline-date` en `SKILL.md`, corré los tests y anotá los cambios en `CHANGELOG.md`.
 
 ## Fuentes principales
 - Cfx.re docs: https://docs.fivem.net/docs/ · natives: https://docs.fivem.net/natives/ · descargas: https://docs.fivem.net/docs/server-download/

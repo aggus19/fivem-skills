@@ -56,7 +56,7 @@ Full list with defaults: [convars-and-commands.md](convars-and-commands.md). The
 | `onesync_radiusFrequency` | `true` | Distance-based update rate. Keep on. |
 | `sv_useAccurateSends` | `true` (Legacy) | Deprecated on Enhanced (use `sv_syncTickRate`). |
 | `sv_entityLockdown` | `inactive` | `relaxed` for RP with ambient traffic; `strict` when the server spawns everything (no ambient population) (§8). |
-| `sv_filterRequestControl` | `0` | `2`–`3` recommended (§8). |
+| `sv_filterRequestControl` | `0` | `2` recommended (§8; [convars-and-commands.md](convars-and-commands.md) §4). |
 | `sv_filterRequestControlSettleTimer` | `30000` ms | Settle time for modes 1 and 3. |
 | `sv_stateBagStrictMode` | `false` | `setr sv_stateBagStrictMode true` in production (§9). |
 | `sv_enableNetworkedSounds` | `true` | Set `false` unless a resource needs networked sounds. |
@@ -173,7 +173,7 @@ Population type (`GetEntityPopulationType`, server) distinguishes ambient (1–5
 | `no_dummy` | Legacy source (`OneSyncVars.h`, undocumented): allows all client entities except networked dummy objects that fail validation (exploded gas pumps/propane tanks are still allowed). Niche; prefer `relaxed`. |
 
 ```cfg
-set sv_entityLockdown strict          # global
+set sv_entityLockdown relaxed         # global; strict only if the server spawns every entity
 ```
 ```lua
 SetRoutingBucketEntityLockdownMode(1, 'strict')   -- per bucket (server); 'inactive' | 'relaxed' | 'strict'
@@ -191,7 +191,7 @@ Migration path: `relaxed` first, find resources that spawn client-side (they bre
 | `4` | Never route `REQUEST_CONTROL_EVENT`. |
 | `-1` | Like `2` but warns in console. |
 
-Any mode ≠ 0 also blocks control requests across routing buckets and from senders in `strict` lockdown. Exempt one entity with `SetEntityIgnoreRequestControlFilter(entity, true)` (server). Recommended: `2` (or `3` on PvP servers), after testing towing/impound/carry scripts.
+Any mode ≠ 0 also blocks control requests across routing buckets and from senders in `strict` lockdown. Exempt one entity with `SetEntityIgnoreRequestControlFilter(entity, true)` (server). Recommended: `2` (see [convars-and-commands.md](convars-and-commands.md) §4), after testing towing/impound/carry scripts.
 
 **Net game events**: `block_net_game_event "<EVENT_NAME>"` / `unblock_net_game_event` (startup cfg) drop game events server-wide (list: https://docs.fivem.net/docs/game-references/net-game-events/). Common hardening: `sv_enableNetworkedPhoneExplosions false` (default), `sv_enableNetworkedSounds false`, `sv_enableNetworkedScriptEntityStates false`, and cancel `explosionEvent`/`ptFxEvent` you don't expect.
 
@@ -284,7 +284,7 @@ end)
 | Lockdown | inactive/relaxed/strict | + `full`; `relaxed` population only in owned grid cells |
 | State bags | Handlers may fire before entity exists; all values sent | Only when entity exists; only replicated values sent; ~10× faster sets |
 | Migration timeout | — | `onesync_migrateDataTimeout` (10000 ms) |
-| Removed | — | `onesync_automaticResend`, `sv_netHttp2`; no-ops: `onesync_enableBeyond`, `sv_enhancedHostSupport`, `sv_protectServerEntities` (works on Legacy) |
+| Removed | — | `onesync_automaticResend`, `sv_netHttp2`; no-ops: `onesync_enableBeyond`, `sv_enhancedHostSupport`, `sv_protectServerEntities` (Legacy-only convar, see [convars-and-commands.md](convars-and-commands.md) §4) |
 
 ## 15. Troubleshooting checklist
 - Entity spawns on server but client handle is 0 → not in scope yet / wrong bucket; wait for `NetworkDoesEntityExistWithNetworkId`.

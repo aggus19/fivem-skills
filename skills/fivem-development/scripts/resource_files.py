@@ -187,6 +187,42 @@ def parse_manifest(text):
     return out
 
 
+def parse_data_files(text):
+    """Return [(type, path, line)] for `data_file 'TYPE' 'path'` and `data_file 'TYPE' { 'a', 'b' }`.
+
+    parse_manifest() keeps only the directive's first argument (the type); this
+    reads the chained path argument(s) so they can be checked against the disk.
+    """
+    stream = list(tokens(text))
+    out = []
+    i = 0
+    while i < len(stream):
+        kind, value, start, _ = stream[i]
+        if kind == 'name' and value == 'data_file':
+            j = i + 1
+            if j < len(stream) and stream[j][0] == '(':
+                j += 1
+            if j < len(stream) and stream[j][0] == 'string':
+                dtype = stream[j][1]
+                j += 1
+                if j < len(stream) and stream[j][0] == ')':
+                    j += 1
+                line = text.count('\n', 0, start) + 1
+                if j < len(stream) and stream[j][0] == 'string':
+                    out.append((dtype, stream[j][1], line))
+                    j += 1
+                elif j < len(stream) and stream[j][0] == '{':
+                    j += 1
+                    while j < len(stream) and stream[j][0] != '}':
+                        if stream[j][0] == 'string':
+                            out.append((dtype, stream[j][1], line))
+                        j += 1
+            i = j
+            continue
+        i += 1
+    return out
+
+
 def glob_match(root, pattern):
     root = root.resolve()
     pattern = pattern.replace('\\', '/')
@@ -194,6 +230,8 @@ def glob_match(root, pattern):
         raise ManifestError('path must stay inside resource: ' + pattern)
     # Cfx supports **.lua as well as **/*.lua.
     pattern = re.sub(r'\*\*(?!/|$)', '**/*', pattern)
+    # Cfx globs only know * and **: '[category]' folders are literal names, not character classes.
+    pattern = re.sub(r'[\[\]]', lambda m: '[' + m.group(0) + ']', pattern)
     matches = sorted(p for p in root.glob(pattern) if p.is_file())
     for path in matches:
         try:

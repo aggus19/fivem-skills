@@ -1,8 +1,9 @@
 # Resource audit procedure (security · performance · compatibility)
 
-Baseline: FXServer Legacy 35245, txAdmin 8.1.1, oxmysql 2.14.3, ox_inventory 2.48, ox_lib 3.40; backdoor indicators from public advisories up to 2026-07 — verified 2026-10-07. Defensive use only: these are **detection signatures**, not payloads.
+Baseline: FXServer Legacy 35245, txAdmin 8.1.1, oxmysql 2.14.3, ox_inventory 2.48, ox_lib 3.40 (machine-readable: `assets/baseline.json`); backdoor indicators from public advisories up to 2026-08 — verified 2026-10-07. Defensive use only: these are **detection signatures**, not payloads.
 
 Use for: reviewing third-party/leaked resources before installing, code review of the user's own resources, "is this script safe?", "my server got hacked", "why is my server lagging?".
+**More than one resource (a server or a `resources/` folder): follow [server-audit.md](server-audit.md)** — it fixes the inventory, the coverage ledger and the stop rule; this file stays the reference for judging each item.
 
 ## Contents
 1. Workflow
@@ -19,16 +20,18 @@ Use for: reviewing third-party/leaked resources before installing, code review o
 
 ## 1. Workflow
 ```
-- [ ] 1. Provenance: where did it come from? (section 2) — leaks = stop here, treat as malware
-- [ ] 2. Inventory: python scripts/manifest.py <resource>   (sides, files, unexpected server_scripts)
-- [ ] 3. Automated: python scripts/audit.py <path> --min low  (also scans *.cfg and dropper file names)
-- [ ] 4. Natives:   python scripts/natives.py check <path> --strict
-- [ ] 5. Manual review of every critical/high finding (read the code, confirm or dismiss)
-- [ ] 6. Manual review of every RegisterNetEvent / callback / server export (section 6)
-- [ ] 7. Performance review (section 7) and compatibility review (section 8)
-- [ ] 8. Report (section 10) with file:line evidence, severity and fix
+- [ ] 1. Provenance (section 2): leaks = stop, treat as malware; unknown = record `unknown` and continue (do not block)
+- [ ] 2. Inventory: python scripts/manifest.py <resource>        (sides, files, data_file, unexpected server_scripts)
+- [ ] 3. Automated: python scripts/audit.py <path> --json        (all severities; also *.cfg, dropper names, package.json)
+- [ ] 4. Entry points: python scripts/surface.py <path> --ledger ledger.md   (every server entry point + sinks + tags)
+- [ ] 5. Natives:   python scripts/natives.py check <path> --strict
+- [ ] 6. Triage: confirm or dismiss EVERY audit.py hit in Backdoor/RCE, SQL and Trust boundary (any severity; §9 table);
+         report manifest/cfg hits as facts; aggregate legacy/perf hits by count (server-audit.md §4, false positives §10)
+- [ ] 7. Review EVERY ledger row with section 6 (1-13) and the exploit classes in server-audit.md §8; set its status
+- [ ] 8. Performance review (section 7) and compatibility review (section 8)
+- [ ] 9. Report (section 10) with file:line evidence, severity, fix and the coverage counts
 ```
-Scripts produce candidates, not verdicts. Never report an unconfirmed finding; never call obfuscated, minified-without-source or escrowed code "safe" — say "not reviewable".
+Scripts produce candidates, not verdicts; their *inventories* (files, endpoints, versions) are complete and must not be sampled. Never report an unconfirmed finding; never call obfuscated, minified-without-source or escrowed code "safe" — say "not reviewable".
 
 ## 2. Provenance and supply-chain review
 Ask first:
@@ -109,16 +112,16 @@ For each `RegisterNetEvent`, `lib.callback.register`, framework callback, NUI→
 6. Parametrised SQL only (Lua and JS template literals)?
 7. Sensitive server exports check `GetInvokingResource()`?
 8. Client-written state bags never trusted; works with `sv_stateBagStrictMode true`?
-9. Entities spawned server-side; works with `sv_entityLockdown strict`?
+9. Entities spawned server-side; works with the configured `sv_entityLockdown` (`relaxed` by default, `strict` only if all entities are server-created)?
 10. **Amplification:** for every client-callable endpoint (net event, `lib.callback.register`/framework callback, NUI→server chain, vRP `Tunnel.bindInterface` function) assume a cheat calls it in a tight loop. Flag: DB query per call (serve reads from a server cache), fan-out `TriggerClientEvent(-1, ...)` or `GlobalState` writes from a client-triggered path, full cache reload/rebuild per call, oversized replies (lists with LONGTEXT/base64; return metadata, fetch details on demand in one batch), and client loops that call the server once per list item (N+1).
 11. Admin/staff endpoints need a real permission (`IsPlayerAceAllowed`, framework group/job) — a cooldown/"CanUse" helper that only checks time is **not** authorization.
 12. String inputs have length caps before any DB write (unbounded strings into LONGTEXT = storage DoS); ownership enforced in SQL (`WHERE id = ? AND owner = ?`).
-13. Evidence discipline: list every file from `fxmanifest.lua` in "Files reviewed"; re-read each cited `file:line`; name the exact handler; summary counts must equal the findings rows.
+13. Evidence discipline: list every file from `fxmanifest.lua` in "Files reviewed" (for a whole server use the coverage table of server-audit.md §11 instead); re-read each cited `file:line`; name the exact handler; summary counts must equal the findings rows.
 
 Severity guide: arbitrary money/items/admin/RCE → **critical**; exploitable dupes, teleports, kill/strip other players → **high**; info leaks, spam, missing rate limits → **medium**; hygiene → **low**.
 
 ## 7. Performance review
-- `resmon` idle ≤ 0.02 ms target; loops with `Wait(0)` outside drawing/input.
+- `resmon` idle around 0.02 ms is an illustrative target, not a gate (performance.md); loops with `Wait(0)` outside drawing/input.
 - Per-frame natives that could be cached; pool scans; `GetDistanceBetweenCoords` instead of `#(a - b)`.
 - Server: synchronous heavy work, per-tick DB queries, broadcasts in loops, entity leaks, heavy work inside game-event handlers.
 - NUI: always-visible heavy UI, unthrottled `SendNUIMessage`.
@@ -138,7 +141,7 @@ Fixes: `performance.md`.
 |---|---|
 | Backdoor / RCE | `known-backdoor` (C), `known-backdoor-ext` (C), `blum-xor-dropper` (C), `node-vm-run` (C), `invoke-native-sensitive` (C), `hardcoded-discord-token` (C), `rce-load-http` (C), `rce-assert-load` (C), `os-exec` (C), `node-child-process` (C), `write-manifest` (C), `rce-load` (H), `obfuscation-hex` (H), `obfuscation-bytes` (H), `js-charcode-decoder` (H), `minified-or-obfuscated` (H), `execute-command` (H), `ace-from-code` (H), `env-index-evasion` (H), `txadmin-token-access` (H), `telegram-exfil` (H), `http-raw-ip` (H), `io-open-write` (H), `hardcoded-license-key` (H), `js-raw-network` (M), `http-exfil` (M), `save-other-resource` (M), `convar-secret` (M), `debug-lib-tamper` (M), `resource-enumeration` (M), `lzstring-utf16` (M), `dropper-filename` (M) |
 | SQL | `sql-concat` (C), `sql-format` (C), `sql-template-literal` (C), `sql-mysql-async` (M) |
-| Trust boundary | `client-money-event` (H), `client-trusted-price` (H), `client-sends-own-id` (H), `webhook-exposed` (H), `server-event-giveitem` (M), `client-setcoords-from-net` (M), `client-replicated-statebag` (M), `statebag-handler-no-replicated` (M), `http-handler-public` (M), `nui-unsafe-html` (M), `nui-to-server-direct` (M), `net-event-no-source` (M; inline and split `RegisterNetEvent('x')` + `AddEventHandler('x', function...)` forms), `deprecated-register-server-event` (L) |
+| Trust boundary | `client-money-event` (H), `client-trusted-price` (H), `client-reported-position` (H), `lua-not-eq-precedence` (H), `client-sends-own-id` (H), `webhook-exposed` (H), `server-event-giveitem` (M), `client-setcoords-from-net` (M), `client-replicated-statebag` (M), `statebag-handler-no-replicated` (M), `http-handler-public` (M), `nui-unsafe-html` (M), `nui-to-server-direct` (M), `net-event-no-source` (M; inline and split `RegisterNetEvent('x')` + `AddEventHandler('x', function...)` forms), `deprecated-register-server-event` (L) |
 | Supply chain (package.json) | `npm-install-script` (M), `npm-nonregistry-dep` (M) |
 | server.cfg | `cfg-public-secret` (H), `cfg-lockdown-inactive` (M), `cfg-scripthook-allowed` (M), `cfg-unquoted-semicolon` (M; `;` outside double quotes splits the command), `cfg-statebag-not-strict` (L), `cfg-nonexistent-devtools` (L) |
 | Manifest | `manifest-hidden-injection` (C), `manifest-legacy` (H), `manifest-dotfile-js` (H), `manifest-old-fxversion` (M), `manifest-node16` (M), `manifest-mysql-async` (M), `manifest-no-game` (M) |
@@ -147,7 +150,7 @@ Exit code 1 when any high/critical finding remains. `--json` for CI.
 
 ## 10. Report format
 ```markdown
-# Audit: <resource> (<date>)
+# Audit: <resource> (<date>)   <!-- whole server: use server-audit.md §11 -->
 **Verdict:** SAFE TO RUN | FIX BEFORE RUNNING | DO NOT RUN (malware) | NOT REVIEWABLE (obfuscated/escrowed)
 **Provenance:** <where it came from>
 ## Critical

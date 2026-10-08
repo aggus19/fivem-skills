@@ -52,7 +52,7 @@ bridge/
 ├── server/qbx.lua  server/qb.lua  server/esx.lua  server/standalone.lua  server/oxinventory.lua (shared item helpers)
 └── client/qbx.lua  client/qb.lua  client/esx.lua  client/standalone.lua
 ```
-`init.lua` loads the right file with ox_lib `require` (client files must be in `files {}`) — see the template. The template ships no ox_core / ND adapter: add `server/ox.lua` + `client/ox.lua` following the same contract after checking their docs (`ox-inventory-target.md` §6, `framework-others.md` §1), and extend `detectFramework()`.
+`init.lua` loads the right file with ox_lib `require` (client files must be in `files {}`) — see the template. The template ships no ox_core / ND adapter: add `server/ox.lua` + `client/ox.lua` following the same contract after checking their docs ([ox-core.md](ox-core.md), `framework-others.md` §1), and extend `detectFramework()`.
 
 ## 4. Rules
 - Business logic never calls `exports.qbx_core`, `ESX.*` or `QBCore.*` directly: only `Bridge.*`.

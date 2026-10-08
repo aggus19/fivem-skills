@@ -191,8 +191,8 @@ Handle **resource restart**: in your own `onResourceStart`, initialise for alrea
 | Limiter | Rate / burst | Effect |
 |---|---|---|
 | `netEvent` | 50/s, burst 200 | excess events dropped |
-| `netEventFlood` | 75/s, burst 300 | client dropped (flood) |
-| `netEventSize` | 128 KiB/s, burst 384 KiB | excess dropped |
+| `netEventFlood` | 75/s, burst 300 | client kicked (flood) |
+| `netEventSize` | 128 KiB/s, burst 384 KiB | client kicked |
 | `latentEvent` | 75/s, burst 125 | |
 | `netCommand` / `netCommandSize` | 7/s burst 14 / 1 KiB/s burst 8 KiB | client → server commands |
 

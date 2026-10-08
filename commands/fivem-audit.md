@@ -1,15 +1,18 @@
 ---
-description: Audit a FiveM resource (or a whole resources folder) for backdoors, exploits, dupes, performance and 2026 compatibility
-argument-hint: <path to resource or resources folder>
+description: Audit a FiveM resource (or a whole server / resources folder) for backdoors, exploits, dupes, performance and 2026 compatibility
+argument-hint: <path to resource, resources folder or server root>
 ---
 
-Use the `fivem-development` skill and follow `references/audit-checklist.md` exactly.
+Use the `fivem-development` skill. Target: $ARGUMENTS
 
-Target: $ARGUMENTS
+- One resource: follow `references/audit-checklist.md` exactly.
+- More than one resource (a server root or a `resources/` folder): follow `references/server-audit.md` exactly.
 
-Run, from `${CLAUDE_PLUGIN_ROOT}/skills/fivem-development/scripts/`:
-- `python audit.py <target>`
-- `python natives.py check <target> --strict`
-- `python manifest.py <each resource>`
+Run, from `${CLAUDE_PLUGIN_ROOT}/skills/fivem-development/scripts/`, in this order:
+- `python project.py <target>` (servers only: versions vs baseline, ensure vs folders, cfg, data_file, assets, git)
+- `python manifest.py <target>`
+- `python audit.py <target> --json`
+- `python surface.py <target> --ledger ledger.md`
+- `python natives.py check <own resources> --strict`
 
-Then confirm every critical/high finding by reading the code, review every net event / callback / export with the five server-side checks, and write the report in the checklist's format (verdict, findings with file:line, fixes, what was not reviewed). Do not modify files unless the user asks.
+Then triage every Backdoor/RCE, SQL and Trust-boundary hit of any severity, review every ledger row with audit-checklist.md §6 (points 1-13) and the exploit classes in server-audit.md §8, and write the report in the template of the file you followed (verdict, coverage counts, findings with file:line, fixes, versions with file:line, what was not reviewed). Never sample the inventories; if rows are left unreviewed, mark the report PARTIAL. Do not modify files unless the user asks.

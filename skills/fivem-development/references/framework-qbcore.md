@@ -291,7 +291,7 @@ end)
 Client export: `exports['qb-inventory']:HasItem(items, amount?)`. Player state bag `inv_busy` blocks opening. Never open stashes from a client-supplied id without server-side job/ownership/distance checks (OpenInventory itself does not check permissions).
 
 ### qb-target 5.5.0 (last code 2026-05-20) — https://github.com/qbcore-fivem/qb-target
-Client-only exports; depends on PolyZone. Many servers run **ox_target** instead. ox_target only `provide`s `qtarget` (partial compatibility); it does **not** provide `qb-target`, so `exports['qb-target']:*` calls fail unless qb-target is also running or a shim is installed — port them to ox_target options ([ox-inventory-target.md](ox-inventory-target.md)).
+Client-only exports; depends on PolyZone. Many servers run **ox_target** instead. ox_target only `provide`s `qtarget` (partial compatibility); it does **not** provide `qb-target`, so `exports['qb-target']:*` calls fail unless qb-target is also running or a shim is installed — port them to ox_target options ([ox-target.md](ox-target.md)).
 ```lua
 exports['qb-target']:AddBoxZone('myres_duty', vector3(441.8, -982.1, 30.7), 0.45, 0.35,
     { name = 'myres_duty', heading = 11.0, debugPoly = false, minZ = 30.6, maxZ = 30.9 },

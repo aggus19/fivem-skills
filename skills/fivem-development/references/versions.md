@@ -1,6 +1,6 @@
 # Version baseline — verified 2026-10-07 (community-review corrections 2026-10-08)
 
-Every value below was checked against primary sources (GitHub releases/tags/source, npm registry, docs.fivem.net, forum.cfx.re, the artifact API) on **2026-10-07**. When exact versions matter, re-check (see "How to re-verify") or ask which versions the user's server runs. Topic files carry their own "Baseline:" header with details.
+Every value below was checked against primary sources (GitHub releases/tags/source, npm registry, docs.fivem.net, forum.cfx.re, the artifact API) on **2026-10-07**. When exact versions matter, re-check (see "How to re-verify") or ask which versions the user's server runs. Topic files carry their own "Baseline:" header with details. `assets/baseline.json` is the machine-readable copy of these versions (incl. min. safe): keep it in sync with this file.
 
 ## Contents
 1. Platform (Cfx.re / Rockstar)
@@ -13,6 +13,7 @@ Every value below was checked against primary sources (GitHub releases/tags/sour
 8. Deprecated / archived / removed — do not recommend
 9. Breaking changes timeline 2024–2026 (highlights)
 10. How to re-verify
+11. Compare installed versions
 
 ## 1. Platform (Cfx.re / Rockstar)
 | Item | Value | Source |
@@ -34,26 +35,26 @@ Every value below was checked against primary sources (GitHub releases/tags/sour
 | Platform License Agreement | dated **2026-09-10**; Tebex is the exclusive monetisation partner | https://fivem.net/terms |
 
 ## 2. Overextended (ox) stack — all back under `github.com/overextended` (CommunityOx archived 2026-04-28)
-| Resource | Version | Date | License | Notes |
-|---|---|---|---|---|
-| ox_lib | **3.40.0** | 2026-10-03 | LGPL-3.0 | npm `@overextended/ox_lib` 3.40.0 (no default export since 3.33.1) |
-| oxmysql | **2.14.3** | 2026-10-06 | LGPL-3.0 | mysql2 3.24.5, Node 22, FXServer ≥ 12913; slow-query default 200 ms |
-| ox_inventory | **2.48.0** | 2026-10-03 | GPL-3.0 | **min. safe 2.47.6** (dupe fixes); frameworks: ox, esx, qbx, nd — **no QBCore since 2.42.0** |
-| ox_target | **1.18.1** | 2026-04-25 | MIT | `provide 'qtarget'` (not qb-target) |
-| ox_core | **1.5.14** | 2026-05-29 | LGPL-3.0 | needs MariaDB ≥ 11.4, own DB driver, Node 22 |
-| ox_doorlock | 1.22.1 | 2026-04-25 | GPL-3.0 | |
-| ox_fuel | 1.5.4 | 2026-05-29 | GPL-3.0 | server trusts client price — patch it (ox-resources-misc.md) |
-| ox_banking | 1.0.6 | — | — | requires ox_core |
+| Resource | Version | Min. safe | Date | License | Notes |
+|---|---|---|---|---|---|
+| ox_lib | **3.40.0** | — | 2026-10-03 | LGPL-3.0 | npm `@overextended/ox_lib` 3.40.0 (no default export since 3.33.1) |
+| oxmysql | **2.14.3** | **2.14.0** (SQLi fix) | 2026-10-06 | LGPL-3.0 | mysql2 3.24.5, Node 22, FXServer ≥ 12913; slow-query default 200 ms |
+| ox_inventory | **2.48.0** | **2.47.6** (dupe fixes) | 2026-10-03 | GPL-3.0 | frameworks: ox, esx, qbx, nd — **no QBCore since 2.42.0** |
+| ox_target | **1.18.1** | — | 2026-04-25 | MIT | `provide 'qtarget'` (not qb-target) |
+| ox_core | **1.5.14** | — | 2026-05-29 | LGPL-3.0 | needs MariaDB ≥ 11.4, own DB driver, Node 22 |
+| ox_doorlock | 1.22.1 | — | 2026-04-25 | GPL-3.0 | |
+| ox_fuel | 1.5.4 | — | 2026-05-29 | GPL-3.0 | server trusts client price — patch it (ox-resources-misc.md) |
+| ox_banking | 1.0.6 | — | — | — | requires ox_core |
 Docs: https://overextended.dev/docs (coxdocs.dev redirects here).
 
 ## 3. Frameworks
-| Framework | Version | Date | Repo / docs | Notes |
-|---|---|---|---|---|
-| Qbox `qbx_core` | **1.24.0** | 2026-08-22 | https://github.com/Qbox-project/qbx_core · https://docs.qbox.re | needs ox_lib ≥ 3.20, ox_inventory ≥ 2.42.1, OneSync Infinity, build ≥ 10731, MariaDB ≥ 10.9; `/optin` enforced for admin cmds |
-| ESX Legacy `es_extended` | **1.15.2** | 2026-09-06 | https://github.com/esx-framework/esx_core · https://docs.esx-framework.org/en | esx_lib required (1.14+), build ≥ 10188; `removeAccountMoney` can go negative; `addInventoryItem` ignores weight |
-| QBCore `qb-core` | manifest 1.3.0 (code 2026-06-17) | — | https://github.com/qbcore-fivem/qb-core · https://qbcore.org/docs | **2026-05 refactor** (no `QBConfig`/`QBShared` globals, `GetShared`, `OnPlayerUpdated`) |
-| ND_Core | 2.3.2 (main to 2026-03) | 2025-02-22 | https://github.com/ND-Framework/ND_Core · https://ndcore.dev | low activity |
-| vRP | — | last push 2025-05 | https://github.com/vRP-framework/vRP | unmaintained; Creative/vRPEX off-GitHub |
+| Framework | Version | Min. safe | Date | Repo / docs | Notes |
+|---|---|---|---|---|---|
+| Qbox `qbx_core` | **1.24.0** | — | 2026-08-22 | https://github.com/Qbox-project/qbx_core · https://docs.qbox.re | needs ox_lib ≥ 3.20, ox_inventory ≥ 2.42.1, OneSync Infinity, build ≥ 10731, MariaDB ≥ 10.9; `/optin` enforced for admin cmds |
+| ESX Legacy `es_extended` | **1.15.2** | — | 2026-09-06 | https://github.com/esx-framework/esx_core · https://docs.esx-framework.org/en | esx_lib required (1.14+), build ≥ 10188; `removeAccountMoney` can go negative; `addInventoryItem` ignores weight |
+| QBCore `qb-core` | manifest 1.3.0 (code 2026-06-17) | — | — | https://github.com/qbcore-fivem/qb-core · https://qbcore.org/docs | **2026-05 refactor** (no `QBConfig`/`QBShared` globals, `GetShared`, `OnPlayerUpdated`) |
+| ND_Core | 2.3.2 (main to 2026-03) | — | 2025-02-22 | https://github.com/ND-Framework/ND_Core · https://ndcore.dev | low activity |
+| vRP | — | — | last push 2025-05 | https://github.com/vRP-framework/vRP | unmaintained; Creative/vRPEX off-GitHub |
 
 QBCore resources: qb-inventory 2.2.3, qb-target 5.5.0, qb-menu 1.5.0, qb-input 1.2.0, qb-banking 2.0.0, PolyZone 2.6.2.
 
@@ -140,6 +141,14 @@ curl -s https://registry.npmjs.org/<pkg>/latest                                 
 python scripts/natives.py update                                                # native DB
 python scripts/build_natives_catalog.py --refresh                               # regenerate assets/natives
 ```
+
+## 11. Compare installed versions
+1. Read the installed `version` from the resource's `fxmanifest.lua` (else `package.json` or the git tag) and cite `file:line`.
+2. Compare semver against **Min. safe** and the baseline (§2–§4, `assets/baseline.json`).
+3. Classify: `< min-safe` (**high** if an advisory exists, e.g. [security.md](security.md) §16) · `< baseline` (low) · `= baseline` · `unknown` (no version found; a fork may carry a stale manifest — say so).
+4. Never call a resource "up to date" without a `file:line` citation.
+
+`python scripts/project.py <server> --versions` does this automatically.
 
 ## Sources
 Each row above cites its primary source inline; topic files list full sources.

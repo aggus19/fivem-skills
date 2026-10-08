@@ -62,7 +62,7 @@ continue independent work. Never fabricate a compatible adapter for a custom/esc
 | Optimize scripts/UI | Reproduce workload; client/server/NUI cost and behavior | `performance.md`, `performance-cookbook.md`, `nui.md` |
 | Hitch / lag / slow save | Identify delayed subsystem; correlate traces and queues | `hitch-diagnostics.md`, then DB or scaling references |
 | Choose or upgrade DB | Supported release, installed SQL compatibility, restore/migration test | `database-optimization.md`, `versions.md` |
-| Audit an entire server | Explicit coverage inventory, reachable privileged operations, opaque code limits | `audit-checklist.md`, `security-validation.md` |
+| Audit an entire server | Tool-generated inventory (`project.py`, `surface.py` ledger), every row reviewed, opaque code limits | `server-audit.md`, `audit-checklist.md`, `security-validation.md` |
 
 Apply security checks to the affected operation. A cosmetic change is not a request
 to migrate the server, install a new engine, or conduct an unrelated full audit.

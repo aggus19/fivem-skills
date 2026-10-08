@@ -15,7 +15,7 @@ exec secrets.cfg
 
 setr ox:locale "es"
 set mysql_slow_query_warning 150
-set sv_entityLockdown relaxed        # move to strict once every resource spawns entities server-side
+set sv_entityLockdown relaxed        # strict only if every entity is server-created (also blocks client ambient population)
 setr sv_stateBagStrictMode true
 
 ensure mapmanager

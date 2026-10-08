@@ -43,7 +43,7 @@ Every net event, callback or export that changes state must answer:
 On failure: reject without mutation and record bounded/sampled evidence. Stale UI, desync and reconnect races can produce invalid calls; a distance mismatch alone is not proof for an automatic ban. See anticheat.md §8.
 
 ## 3. Net events and mutation handlers
-Use the five checks above at the entry point. For a mutation flow, read the generated shop's server handler and `server/purchase.lua`: success, definitive failure and ambiguous results are distinct. A sell operation needs the same discipline in reverse: a successful item removal followed by an unchecked money grant can lose value.
+Use the five checks above at the entry point. For a mutation flow, read the generated shop's server handler and `assets/templates/resource-lua/server/purchase.lua`: success, definitive failure and ambiguous results are distinct. A sell operation needs the same discipline in reverse: a successful item removal followed by an unchecked money grant can lose value.
 
 The generic shop is disabled until its installed adapters, session lifecycle and durable operation/recovery path are integrated. No short pair of framework exports is presented as an atomic economy transaction. See [design-and-validation.md](design-and-validation.md).
 
@@ -87,16 +87,16 @@ end)
 - Minigames/jobs: server decides outcome or validates elapsed time (reject completions faster than physically possible).
 - ox_inventory hooks are **validation-only** (return `false` to cancel); do side effects in post-hook events (ox_inventory ≥ 2.47.0).
 - Log every economic mutation (license, amount, reason, resource).
-- **Bound before you multiply.** Lua 5.4 integer arithmetic wraps silently on overflow (no error, no clamp), so `price * qty` with a huge integer `qty` can become negative and pass a `balance < total` check. Cap every client-influenced operand first (`qty <= MAX_QTY`, `math.type(qty) == 'integer'`), then sanity-check the result (`total > 0 and total <= MAX_TX`). Modern ESX/QBCore reject non-positive amounts, but custom accounts and bridges often don't. Source: Lua 5.4 manual 3.4.1.
+- **Bound before you multiply.** Lua 5.4 integer arithmetic wraps silently on overflow (no error, no clamp), so `price * qty` with a huge integer `qty` can become negative and pass a `balance < total` check. Cap every client-influenced operand first (`qty <= MAX_QTY`, `math.type(qty) == 'integer'`), then sanity-check the result (`total > 0 and total <= MAX_TX`). Modern ESX/QBCore reject non-positive amounts, but custom accounts and bridges often don't; ESX accounts with `round = true` round *after* the `> 0` check, so `0.4` charges 0 — require integers (`math.tointeger(n)`) yourself. Source: Lua 5.4 manual 3.4.1.
 - **Clamping is not validation for privileged quantities.** A client may report *that* something finished, never *how much*. If a payout depends on a quantity (damage repaired, distance driven, items found), the server must have observed or recorded it. Pattern: on `start`, store `pending[src] = { startedAt = os.time(), netId = netId, before = <server-read value> }`; on `complete`, take `pending[src]` (nil -> reject), set it to `nil` immediately (single use, blocks replays), reject if the elapsed time is below the minimum, re-check distance, compute the payout from the stored record plus `ServerConfig`, and clear `pending[src]` on `playerDropped`.
 - **Retry identity is not permission.** Bind a request key to actor, action and normalized payload. In-memory deduplication is bounded but does not survive restart. Use stable activity IDs for one server-authorized reward; a reused network ID or second-resolution timestamp alone is not sufficient uniqueness.
 - **Ledger plus export is not atomic.** Recording PENDING, calling an inventory/framework export, then recording DONE leaves a crash window. Require owner-supported idempotency/receipts or a recovery design that can establish whether that operation applied. Unknown outcomes must not become FAILED merely because no success response arrived.
 - **Retry only with evidence.** A confirmed rolled-back, DB-only transaction may be retried with bounded attempts if its whole operation is safe to repeat. Generic driver `false`, connection loss or timeout does not necessarily prove rollback. Never retry an external grant blindly. See [security-validation.md](security-validation.md) for the operation states and adversarial matrix; a zero-row UPDATE does not automatically roll back a batch transaction.
 
 ## 6. Entities, state bags, request control, teleport
-- **State bags:** by default players can write their own player bag and owned-entity bags. `setr sv_stateBagStrictMode true` makes the server the only writer of replicated keys (FXServer commit 2024-10-19; ox_lib ≥ 3.37 prints a startup warning when it is off; silence with `set ox:ignoreSecurityAdvisory ["stateBagStrictMode"]`, auto-silenced when qb-core is running). Even with strict mode, never read money/permissions from bags a client could influence; keep authority in server tables.
+- **State bags:** by default players can write their own player bag and owned-entity bags. `setr sv_stateBagStrictMode true` makes the server the only writer of replicated keys (FXServer commit 2025-01-27; ox_lib ≥ 3.37 prints a startup warning when it is off; silence with `set ox:ignoreSecurityAdvisory ["stateBagStrictMode"]`, auto-silenced when qb-core is running). Even with strict mode, never read money/permissions from bags a client could influence; keep authority in server tables.
 - Server-side guard for non-strict servers: `AddStateBagChangeHandler(key, nil, function(bagName, key, value, _, replicated) ... end)` — `replicated` describes replication intent, not authenticated authorship. Validate against server-owned state; the callback cannot reject the original change. Do not treat a parameter-presence check as an authorization guard.
-- **Entity lockdown:** `set sv_entityLockdown strict` (no client-created networked entities) or `relaxed` (blocks only script-created ones); per bucket `SetRoutingBucketEntityLockdownMode(bucket, 'strict')`. FXServer source also accepts `no_dummy`; docs list `full` (Enhanced only). Spawn server-side: `CreateVehicleServerSetter`, `CreatePed`, `CreateObjectNoOffset`.
+- **Entity lockdown:** `set sv_entityLockdown relaxed` by default (blocks client script-created entities, keeps ambient population); `strict` only when every entity is created server-side (it also blocks client-created ambient population) — see [convars-and-commands.md](convars-and-commands.md) §4; per bucket `SetRoutingBucketEntityLockdownMode(bucket, 'strict')`. FXServer source also accepts `no_dummy`; docs list `full` (Enhanced only). Spawn server-side: `CreateVehicleServerSetter`, `CreatePed`, `CreateObjectNoOffset`.
 - `sv_filterRequestControl` blocks `REQUEST_CONTROL_EVENT` routing: 0 off (default in source), 1 player-controlled *settled* entities, 2 any player-controlled entity, 3 = 2 + settled non-player entities, 4 no routing at all; -1 behaves like 2 with a console warning. Settle timer: `sv_filterRequestControlSettleTimer` (ms, default 30000).
 - `sv_protectServerEntities true` (Legacy; replicated) blocks clients deleting server-created entities; on Enhanced lockdown replaces it.
 - `sv_enableNetworkedPhoneExplosions` (default false) — keep false. `sv_enableNetworkedSounds` (default true) — set false if you see sound spam and no resource needs networked sounds.
@@ -130,9 +130,9 @@ if not IsPlayerAceAllowed(src, 'myres.admin') then return end
 ## 9. Platform security convars (server.cfg)
 | Convar | Recommended | Notes (source) |
 |---|---|---|
-| `sv_entityLockdown` | `strict` (or `relaxed` while migrating) | default `inactive`; needs server-side spawning everywhere |
+| `sv_entityLockdown` | `relaxed`; `strict` only if all entities are server-created | default `inactive`; `strict` also blocks client-created ambient population |
 | `sv_stateBagStrictMode` | `true` via `setr` | some old scripts break; fix them |
-| `sv_filterRequestControl` | `2`–`4` after testing | default 0 in source |
+| `sv_filterRequestControl` | `2` after testing | default 0 in source |
 | `sv_protectServerEntities` | `true` (Legacy) | replicated convar |
 | `sv_enableNetworkedPhoneExplosions` | `false` (default) | |
 | `sv_scriptHookAllowed` | `false` | docs: "Not recommended - makes the server vulnerable" |
@@ -147,7 +147,7 @@ if not IsPlayerAceAllowed(src, 'myres.admin') then return end
 | `sv_tebexSecret`, `mysql_connection_string`, `sv_licenseKey` | `set` only | never `setr`/`sets` |
 
 ## 10. Rate limiting
-**Built-in (per client, FXServer source):** `rateLimiter_netEvent_rate/burst` (default 50/200), `rateLimiter_netEventFlood_*` (75/300 → drop "Reliable network event overflow"), `rateLimiter_netEventSize_*` (128 KiB/384 KiB), and `rateLimiter_stateBag*`. These protect the server process, not your economy — still rate-limit each sensitive action.
+**Built-in (per client, FXServer source):** `rateLimiter_netEvent_rate/burst` (default 50/200 → excess events dropped), `rateLimiter_netEventFlood_*` (75/300 → client kicked, "Reliable network event overflow"), `rateLimiter_netEventSize_*` (128 KiB/384 KiB → client kicked; values: [convars-and-commands.md](convars-and-commands.md) §7, [versions.md](versions.md) §1), and `rateLimiter_stateBag*`. These protect the server process, not your economy — still rate-limit each sensitive action.
 
 **Per resource — token bucket per player and key:**
 ```lua
@@ -248,7 +248,7 @@ end)
 | Callback data leak | callback returns other players' data | return only caller's own data |
 | NUI injection / XSS | `innerHTML` with player text | escape, framework rendering |
 | State bag abuse | trusting client-written bags | `sv_stateBagStrictMode`, server tables |
-| Entity spawn spam / blacklisted models | client-created networked entities | `sv_entityLockdown strict`, `entityCreating` filter (anticheat.md) |
+| Entity spawn spam / blacklisted models | client-created networked entities | `sv_entityLockdown` (`relaxed`; `strict` if all spawns are server-side), `entityCreating` filter (anticheat.md) |
 | Explosion / ptfx / projectile spam | game events routed unchecked | cancel/whitelist `explosionEvent`, `ptFxEvent`, `startProjectileEvent` |
 | Remote weapon give/remove, task clearing | `giveWeaponEvent`, `removeWeaponEvent`, `clearPedTasksEvent` on other players | cancel from clients (anticheat.md) |
 | Damage manipulation | modified damage values | `weaponDamageEvent` checks, server-side health logic |
@@ -276,7 +276,7 @@ end)
 - [ ] No secrets/webhooks in client/shared files or `setr`/`sets`.
 - [ ] No `load`/`loadstring`/`eval`/`new Function`/`os.execute`/`io.popen`/`child_process`; no obfuscated code.
 - [ ] Admin actions gated by ACE/framework permissions on the server.
-- [ ] Entities spawned server-side; `sv_entityLockdown strict`, `sv_stateBagStrictMode true` tested.
+- [ ] Entities spawned server-side; `sv_entityLockdown relaxed` (or `strict` if no client-created ambient population is needed), `sv_stateBagStrictMode true` tested.
 - [ ] Game-event filters in place (anticheat.md).
 - [ ] NUI escapes player text; focus released.
 - [ ] Logs + alerts server-side; webhook batched with `allowed_mentions`.

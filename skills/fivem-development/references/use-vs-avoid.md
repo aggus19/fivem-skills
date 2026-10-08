@@ -81,7 +81,7 @@ Baseline: FXServer Legacy 35245 / Latest 37150, game build 3889, CfxLua 5.4, Nod
 ## 5. Entities, OneSync, state bags
 | AVOID | USE | Why |
 |---|---|---|
-| `sv_entityLockdown inactive` (default) | `strict` (or `relaxed` while migrating) | blocks client spawn exploits |
+| `sv_entityLockdown inactive` (default) | `relaxed`; `strict` only if every entity is server-created (it also blocks client-created ambient population) — see [convars-and-commands.md](convars-and-commands.md) §4 | blocks client spawn exploits |
 | client-writable replicated state for authority | `setr sv_stateBagStrictMode true`; server tables for money/permissions | clients could write bags |
 | nested state bag edits `state.x.y = v` | flat keys `state['x:y'] = v` | nested edits don't replicate |
 | polling entity state | `AddStateBagChangeHandler` | event-driven |

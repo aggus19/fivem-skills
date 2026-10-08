@@ -8,9 +8,11 @@ Checks:
   - '@other_resource/...' imports have a matching dependency (or are well-known)
   - server-only files listed as client scripts (leaks server code to clients) and vice versa
   - duplicates and deprecated directives
+  - every data_file path resolves to a file ('[category]' folder names are literal, not glob classes)
 
 Usage:
   python manifest.py <resource_dir> [<resource_dir> ...]
+  python manifest.py <resources folder or server root>   # checks every resource below it
 Exit code: 0 = ok (warnings allowed), 1 = errors, 2 = usage error.
 Standard library only (Python 3.8+).
 """
@@ -22,7 +24,7 @@ from pathlib import Path
 
 # Also works with python -I; imports only this script's installed sibling helper.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from resource_files import LIST_DIRECTIVES, ManifestError, glob_match, parse_manifest
+from resource_files import LIST_DIRECTIVES, SKIP_DIRS, ManifestError, glob_match, parse_data_files, parse_manifest
 
 DEP_DIRECTIVES = {"dependency", "dependencies"}
 # '@resource/...' imports that are commonly used without a `dependency` line; still recommended.
@@ -107,6 +109,23 @@ def check(res: Path) -> tuple[list[str], list[str]]:
                 if kind == 'server' and re.search(r"(^|/)(client|cl)([/_.]|$)|(^|/)cl_", low):
                     warns.append(f"server script '{rel}' looks client-side")
 
+    # data_file paths must exist (a missing YTYP/meta silently breaks maps, vehicles and props on the client).
+    try:
+        data_files = parse_data_files(mf.read_text(encoding="utf-8-sig"))
+    except (ManifestError, OSError, UnicodeError):
+        data_files = []
+    missing = []
+    for dtype, entry, line in data_files:
+        try:
+            hits = glob_match(res, entry)
+        except (ManifestError, ValueError, OSError):
+            hits = []
+        if not hits:
+            missing.append(f"line {line}: data_file '{dtype}' '{entry}'")
+    if missing:
+        errors.append(f"{len(missing)} of {len(data_files)} data_file path(s) match no file: " + "; ".join(missing[:10])
+                      + (" ..." if len(missing) > 10 else ""))
+
     ui = (d.get("ui_page") or [None])[0]
     if ui:
         if ui.startswith(("http://", "https://")):
@@ -131,8 +150,22 @@ def main() -> int:
         print(__doc__)
         return 2
     total_err = 0
+    targets = []
     for arg in sys.argv[1:]:
         res = Path(arg)
+        if res.is_dir() and not (res / "fxmanifest.lua").exists() and not (res / "__resource.lua").exists():
+            # A resources folder (or server root): check every resource below it, in a stable order.
+            import os
+            found = []
+            for base, dirs, names in os.walk(str(res)):
+                dirs[:] = sorted(x for x in dirs if x not in SKIP_DIRS)
+                if "fxmanifest.lua" in names or "__resource.lua" in names:
+                    found.append(Path(base))
+                    dirs[:] = []
+            targets += found or [res]
+        else:
+            targets.append(res)
+    for res in targets:
         errors, warns = check(res)
         print(f"== {res}")
         for e in errors:
@@ -142,6 +175,8 @@ def main() -> int:
         if not errors and not warns:
             print("  OK")
         total_err += len(errors)
+    if len(targets) > 1:
+        print(f"\n-- {len(targets)} resource(s) checked; {total_err} error(s)")
     return 1 if total_err else 0
 
 

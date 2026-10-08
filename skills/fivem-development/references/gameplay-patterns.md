@@ -120,7 +120,7 @@ EndTextCommandSetBlipName(blip)
 1. Config lists locations (shared) and prices/rewards (server-only config).
 2. Client: ox_target zone/entity option or `lib.points` → show option (UX only).
 3. Client sends **intent** only (`myres:server:buy`, `itemName`, `count`) or calls a `lib.callback`.
-4. Server: five checks (`security.md`): who, allowed, where (distance to the configured location), what (whitelist/clamp), how often → remove → add → log.
+4. Server: five checks (`security.md`): who, allowed, where (distance to the configured location), what (whitelist names, recompute prices, **reject** invalid quantities — never clamp), how often → mutate with no yield between the check and the mutation (if a step can yield: take/verify first, compensate on failure) → log.
 5. Client updates UI from the server response.
 
 Use the checked compensation example in `assets/templates/resource-lua/server/purchase.lua` through the template's server handler. It distinguishes a definitive failed grant (attempt one checked refund) from an unknown result (reconcile, never blindly refund/regrant). This is an integration example; the shop stays disabled until the project's durable operation/recovery service and adapter contracts are wired. Prefer inventory-owned shop functionality where it meets the feature's requirements.

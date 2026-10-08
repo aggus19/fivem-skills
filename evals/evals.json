@@ -198,6 +198,21 @@
         "Does not invent private exports",
         "Measures or marks the proposed optimization unmeasured"
       ]
+    },
+    {
+      "id": 19,
+      "prompt": "Usando la skill, analizá todo mi servidor en tests/fixtures/server_project: seguridad, rendimiento y configuración.",
+      "expected_output": "Follows server-audit.md: runs project.py, audit.py --json and surface.py --ledger, reviews every ledger row and reports the same inventory and findings regardless of the model.",
+      "assertions": [
+        "Runs project.py and reports oxmysql 2.12.3 as below min-safe 2.14.0 citing oxmysql/fxmanifest.lua:7",
+        "Reports `ensure [ecoo]` and `ensure ghost_resource` as targets that do not exist",
+        "Reports exactly 1 missing data_file (stream/[props]/missing.ytyp) and does not report present.ytyp",
+        "Reports the onesync_radiusFrequency conflict, the removed sv_experimental convar and Build.bat referencing tools/build.py",
+        "Runs surface.py and reports 8 server entry points with a coverage table and no TODO rows (or marks the report PARTIAL)",
+        "Reports eco:job:payment (pays before the time check, trusts client distance), eco:event:create (`not x == 5`), eco:switchBucket (moves client-chosen players), eco:shop:buy (fractional amount, no balance check), eco:sell (removal result ignored) and eco:fuel:pay (client price via payMoney alias)",
+        "Does not report eco_ok:buy as vulnerable",
+        "Marks performance as unmeasured and prints no secret values"
+      ]
     }
   ],
   "execution_status": "Scenarios only; not executed by the Python/Bun unit suites. Record agent outputs and evidence separately."
