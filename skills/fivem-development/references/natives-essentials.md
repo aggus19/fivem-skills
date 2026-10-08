@@ -73,7 +73,7 @@ Full catalogue of all natives: [assets/natives/README.md](../assets/natives/READ
 | [`SetPedPropIndex`](https://docs.fivem.net/natives/?_0x93376B65A266EB5F)`(Ped ped, int componentId, int drawableId, int textureId, BOOL attach)` | C | Props: 0 hat, 1 glasses, 2 ears, 6 watch, 7 bracelet. |
 | [`ClearPedProp`](https://docs.fivem.net/natives/?_0x0943E5B8E078E76E)`(Ped ped, int propId)` | C |  |
 | [`SetPedHeadBlendData`](https://docs.fivem.net/natives/?_0x9414E18B9434C2FE)`(Ped ped, int shapeFirstID, int shapeSecondID, int shapeThirdID, int skinFirstID, int skinSecondID, int skinThirdID, float shapeMix, float skinMix, float thirdMix, BOOL isParent)` | C | Freemode face/heritage. |
-| [`SetPedConfigFlag`](https://docs.fivem.net/natives/?_0x1913FE4CBF41C463)`(Ped ped, int flagId, BOOL value)` | C | Ped behaviour flags (e.g. 32 = can fly through windscreen, 184 = prevent seat shuffle). Flag list: DurtyFree dumps. |
+| [`SetPedConfigFlag`](https://docs.fivem.net/natives/?_0x1913FE4CBF41C463)`(Ped ped, int flagId, BOOL value)` | C | Ped behaviour flags (e.g. 32 = can fly through windscreen, 184 = prevent seat shuffle; 35 = UseHelmet, auto-wear helmet on bikes, not "no idle anims"). Flag list: DurtyFree dumps. |
 | [`GetPedConfigFlag`](https://docs.fivem.net/natives/?_0x7EE53118C892B513)`(Ped ped, int flagId, BOOL p2)` → `BOOL` | C |  |
 | [`SetPedCanRagdoll`](https://docs.fivem.net/natives/?_0xB128377056A54E2A)`(Ped ped, BOOL toggle)` | C |  |
 | [`SetPedToRagdoll`](https://docs.fivem.net/natives/?_0xAE99FB955581844A)`(Ped ped, int minTime, int maxTime, int ragdollType, BOOL bAbortIfInjured, BOOL bAbortIfDead, BOOL bForceScriptControl)` → `BOOL` | C |  |
@@ -526,7 +526,7 @@ Blips are **client-side and local**; create them on each client (e.g. on resourc
 | [`AddBlipForCoord`](https://docs.fivem.net/natives/?_0x5A039BB0BCA604B6)`(float x, float y, float z)` → `Blip` | C |  |
 | [`AddBlipForEntity`](https://docs.fivem.net/natives/?_0x5CDE92C702A8FCE7)`(Entity entity)` → `Blip` | C | Entity must exist locally; for far players use coords from the server. |
 | [`AddBlipForRadius`](https://docs.fivem.net/natives/?_0x46818D79B1F7499A)`(float posX, float posY, float posZ, float radius)` → `Blip` | C | Radius blips ignore `SetBlipSprite`; set alpha. |
-| [`AddBlipForArea`](https://docs.fivem.net/natives/?_0xCE5D0E5E315DB238)`(float x, float y, float z, float width, float height)` → `Blip` | C |  |
+| [`AddBlipForArea`](https://docs.fivem.net/natives/?_0xCE5D0E5E315DB238)`(float x, float y, float z, float width, float height)` → `Blip` | C | Open bug citizenfx/fivem#3973 (2026-05): `SetBlipAsShortRange` is ignored for area blips (stay on the minimap at any distance); create/remove them by player distance instead. |
 | [`SetBlipSprite`](https://docs.fivem.net/natives/?_0xDF735600A4696DAF)`(Blip blip, int spriteId)` | C |  |
 | [`SetBlipColour`](https://docs.fivem.net/natives/?_0x03D7FB09E75D6B7E)`(Blip blip, int color)` | C |  |
 | [`SetBlipScale`](https://docs.fivem.net/natives/?_0xD38744167B2FA257)`(Blip blip, float scale)` | C |  |

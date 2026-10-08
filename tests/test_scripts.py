@@ -41,6 +41,53 @@ class AuditTests(unittest.TestCase):
             self.assertIn(rule, self.rules)
 
 
+class AuditIocRuleTests(unittest.TestCase):
+    """New rule families: IOC/evasion lines, manifest concealment, cfg, dropper names, split events, package.json."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.bad = [(f["severity"], f["rule"], f["file"].replace("\\", "/"))
+                   for f in json.loads(run("audit.py", str(FIX / "ioc_resource"), "--json").stdout)]
+        cls.clean = [f["rule"] for f in json.loads(run("audit.py", str(FIX / "clean_resource"), "--json").stdout)]
+
+    def rules(self):
+        return {r for _, r, _ in self.bad}
+
+    def test_ioc_and_evasion_line_rules_match(self):
+        expected = {"blum-xor-dropper", "known-backdoor-ext", "node-vm-run", "invoke-native-sensitive",
+                    "hardcoded-discord-token", "txadmin-token-access", "env-index-evasion", "telegram-exfil",
+                    "http-raw-ip", "io-open-write", "hardcoded-license-key", "client-sends-own-id",
+                    "debug-lib-tamper", "resource-enumeration", "http-handler-public",
+                    "statebag-handler-no-replicated", "lzstring-utf16", "nui-unsafe-html"}
+        self.assertEqual(expected - self.rules(), set())
+
+    def test_manifest_concealment_rules(self):
+        self.assertIn(("critical", "manifest-hidden-injection", "fxmanifest.lua"), self.bad)
+        self.assertIn(("high", "manifest-dotfile-js", "fxmanifest.lua"), self.bad)
+
+    def test_cfg_rules(self):
+        self.assertIn(("low", "cfg-nonexistent-devtools", "server.cfg"), self.bad)
+        semis = [b for b in self.bad if b[1] == "cfg-unquoted-semicolon"]
+        self.assertEqual(len(semis), 1)  # only the unquoted `;` line, not the quoted connection string
+
+    def test_split_net_event_without_source(self):
+        hits = [b for b in self.bad if b[1] == "net-event-no-source" and b[2].endswith("server/main.lua")]
+        self.assertEqual(len(hits), 1)  # `source` appears only in a comment
+
+    def test_dropper_names(self):
+        self.assertIn(("critical", "known-backdoor", "server/sync_worker.js"), self.bad)  # name + loader code
+        self.assertIn(("medium", "dropper-filename", "server/jest_mock.js"), self.bad)    # name only
+        self.assertIn(("critical", "known-backdoor", "evil/yarn_builder.js"), self.bad)   # stock name, wrong place
+
+    def test_package_json(self):
+        self.assertIn(("medium", "npm-install-script", "package.json"), self.bad)
+        self.assertIn(("medium", "npm-nonregistry-dep", "package.json"), self.bad)
+
+    def test_benign_lookalikes_not_flagged(self):
+        # clean_resource only legitimately trips convar-secret (reading sv_licenseKey via GetConvar)
+        self.assertEqual(set(self.clean), {"convar-secret"}, self.clean)
+
+
 class ManifestTests(unittest.TestCase):
     def test_bad_manifest(self):
         res = run("manifest.py", str(BAD))

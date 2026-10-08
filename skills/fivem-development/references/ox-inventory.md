@@ -340,6 +340,8 @@ Item fields: `name, price, currency?` (item used as money), `count?` (stock), `l
 
 **Vehicles** (`data/vehicles.lua`): `Storage[model] = 0..3` (0 none, 1 no trunk, 2 no glovebox, 3 trunk in hood), `glovebox[class] = { slots, maxWeight }`, `trunk[class]`, plus `models` overrides. Glovebox requires being inside the vehicle; trunk requires lock status 0/1/8 and ≤16 m.
 
+Vehicle inventories are keyed by plate: a player who copies a plate can reach the original owner's trunk (ox_inventory#1829). Use ox_inventory >= 2.48 (netid-only open), keep plate changers server-validated and unique, and enforce ownership in your framework layer; ox_inventory's own owner check is ox_core-specific.
+
 **Dumpsters**: non-networked by default (id `dumpster<netid>`), random loot from `inventory:dumpsterloot`.
 
 ## 10. Metadata, durability, images

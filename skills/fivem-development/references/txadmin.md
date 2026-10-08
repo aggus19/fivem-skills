@@ -17,7 +17,8 @@ Baseline: txAdmin **8.1.1** (2026-06-05), bundled with FXServer Recommended 3524
 12. Logs, backups and maintenance
 13. Security hardening
 14. Version notes (8.0 / 8.1)
-15. Sources
+15. Automating txAdmin from tools (internal API)
+16. Sources
 
 ## 1. What it is, ports and data layout
 - Web panel + process manager shipped inside every FXServer/Cfx Server artifact (txAdmin joined Cfx.re in April 2025). Starting `FXServer.exe` / `run.sh` **without** `+exec` launches txAdmin, which then spawns FXServer with your `server.cfg`.
@@ -256,7 +257,16 @@ Settings → Discord: bot token, guild id, warnings channel; enable the Server M
 - **8.1.0** (2026-06-03): `external` allowlist mode; "whitelist" → "allowlist" in UI (config keys/events unchanged); delete player IDs (`players.remove_ids`); `printFxResourcesBootLog` command; PWA; new recipe index URL.
 - **8.1.1** (2026-06-05): allowlist renames; `sv_allowlistInstructions` not set in adminOnly.
 
-## 15. Sources
+## 15. Automating txAdmin from tools (internal, unversioned API)
+txAdmin has no public REST API. Its panel routes can be scripted but may change between releases (verified against citizenfx/txAdmin master, `core/modules/WebServer/router.ts`, 2026-10-07):
+- Login: `POST /auth/password` JSON `{ "username", "password" }` → session cookie + `csrfToken` in the JSON body. Send it back as header `x-txadmin-csrftoken` on every authenticated POST (reverse proxies must not strip it). Login is behind a rate limiter (repeated failures lock the IP for a while).
+- Resources: `POST /fxserver/commands` `{ "action": "ensure_res"|"restart_res"|"start_res"|"stop_res"|"refresh_res", "parameter": "<resource>" }`. Needs permission `commands.resources`; start/restart/ensure of `runcode` is refused. Run `refresh_res` after editing an `fxmanifest.lua`.
+- Server: `POST /fxserver/controls` `{ "action": "start"|"stop"|"restart" }` (permission `control.server`).
+- Players: `GET /player/search`; `POST /player/kick` etc. (permissions `players.kick`, `players.warn`, `players.ban`, ...).
+- Live console: socket.io at `/socket.io` with handshake query `rooms=liveconsole`, **long-polling only** (the panel handles no websocket upgrade); server emits `consoleData` (recent buffer first), client emits `consoleCommand` (needs `console.write`; viewing needs `console.view`). No ack; newlines in commands become spaces; the command is logged under the admin's name. Details and risks: [ai-dev-workflow-and-mcp.md](ai-dev-workflow-and-mcp.md).
+- Use a dedicated admin account with only these permissions; keep credentials in environment variables. `/host/status` with `TXHOST_API_TOKEN` (§3) is the only token-based route.
+- Sources: https://github.com/citizenfx/txAdmin — `core/modules/WebServer/router.ts`, `core/routes/authentication/verifyPassword.ts`, `core/modules/WebServer/middlewares/authMws.ts`, `core/modules/WebServer/webSocket.ts`, `core/modules/WebServer/wsRooms/liveconsole.ts`
+## 16. Sources
 - https://github.com/citizenfx/txAdmin (docs: `events.md`, `env-config.md`, `permissions.md`, `menu.md`, `recipe.md`, `discord-status.md`, `custom-server-log.md`, `logs.md`; source: `core/modules/ConfigStore/schema/*.ts`, `core/modules/AdminStore/index.js`, `core/deployer/*`, `core/modules/FxScheduler.ts`, `core/modules/FxMonitor/index.ts`, `core/boot/getHostVars.ts`, `resource/*.lua`)
 - https://github.com/citizenfx/txAdmin/releases (v8.0.0, v8.0.1, v8.1.0, v8.1.1)
 - https://github.com/citizenfx/txAdmin-recipes (README, `indexv4.json`, `indexv5.json`)

@@ -29,6 +29,7 @@ Where docs and source disagree, the **source** wins and the row says so. Legacy 
 | `+set name value` | On the command line (startup) | — |
 Flags in source (`citicore/console/Console.Variables.h`): `ReadOnly` = only settable at startup (`+set` or the startup cfg); `Internal` = cannot be changed at all; `ScriptRestricted` = scripts can't read. Names are **case-insensitive** (`sv_maxclients` = `sv_maxClients`). Startup-only list (`citizen-server-main/src/ServerInstance.cpp`): `onesync`, `onesync_enabled`, `onesync_population`, `netlib`, `onesync_enableInfinity`, `onesync_enableBeyond`, `gamename`, `sv_enforceGameBuild`, `sv_licenseKey`, `resources_useSystemChat`.
 Print a value: type its name in the console. Quotes for spaces: `set my_var "a b c"`.
+**`;` separates commands** in server.cfg and the console (Quake-style), exactly like a newline. `set foo a;b` runs `set foo a` and then a command `b`. Only double quotes protect it: `set mysql_connection_string "user=fivem;password=x;host=127.0.0.1;database=fivem"`. Comments are `#`, never `;` (`audit.py` rule `cfg-unquoted-semicolon`). Source: `Context::ExecuteBuffer` in https://github.com/citizenfx/fivem/blob/master/code/client/citicore/console/Console.cpp
 
 ## 2. Reading convars from scripts
 ```lua
@@ -59,7 +60,7 @@ Restrict reading of secrets to one resource: `add_convar_permission <resource> r
 | `sv_maxclients` | set | `30` | 1–2048 | your slots | ServerInfo. >48 needs Element Club tier |
 | `sv_licenseKey` | set | — | `cfxk_…` | in `secrets.cfg` | Startup only; key from portal.cfx.re |
 | `sv_enforceGameBuild` | set | mandated default (`3258` in source) | build number or alias (`mp2026_01` = 3889) | `3889` | Startup only. Enh: only latest or `1` |
-| `gamename` | set (+set) | `gta5` | `gta5`, `rdr3` | — | Startup only |
+| `gamename` | set (+set) | `gta5` | `gta5`, `rdr3`; Cfx Server (Enhanced) reports `gta5enhanced` (per esx_lib) | — | Startup only |
 | `sv_lan` | set | `false` | bool | `false` | Skips ticket/license checks; not listed |
 | `sv_master1` | set | Cfx ingress URL | URL or `""` | leave default | `""` → private (docs: disables join from browser; source: no listing heartbeat) |
 | `sv_master2`, `sv_master3` | set | `""` | URL | — | Extra heartbeat targets |
@@ -74,7 +75,7 @@ Restrict reading of secrets to one resource: `add_convar_permission <resource> r
 | `sv_tebexSecret` | set | `""` | key | in `secrets.cfg` | Tebex integration |
 | `sv_kvsName` | set | `default` | name | default | KVP DB folder; startup |
 | `rcon_password` | set | `""` (RCON off) | string | leave unset | ReadOnly; UDP RCON, plaintext |
-| `sv_playersToken` | set | `""` | token | set if you use `/players.json` privately | Gates private player data (header `X-Players-Token` or `?token=`) |
+| `sv_playersToken` | set | `""` | token | set if you use `/players.json` privately | Gates private player data (header `X-Players-Token` or `?token=`); without it `/players.json` returns placeholder entries (id 0, name "Player") — only the count is real |
 | `sv_profileDataToken` | set | `""` | token | set if exposing profiler | Protects `/profileData.json` |
 | `resources_useSystemChat` | +set | `true` (since 2026-09-04) | bool | `true` | Use system_resources `chat`; startup only |
 | `sv_defaultGameBuild` | — | mandated | — | — | Internal (2026-06) |
@@ -158,7 +159,7 @@ Restrict reading of secrets to one resource: `add_convar_permission <resource> r
 Raise a limit only when the console names it for legitimate traffic (e.g. big inventories syncing state bags); a client exceeding the flood limit is dropped.
 
 ## 8. Enhanced-only convars (Cfx Server, docs)
-`sv_syncTickRate` (60, 1–120) · `sv_resourceFileDownloadTimeout` (2 min) · `sv_ioThreads` (0 = auto 2–4, startup) · `sv_clientConnectingTimeoutMilliseconds` (60000) · `sv_clientConnectedTimeoutMilliseconds` (120000) · `sv_pingIntervalMilliseconds` (5000) · `sv_voiceChat` (false) · `sv_mumble` (false, setr, deprecated) · `sv_devMode` (false; max 8 slots) · `onesync_migrateDataTimeout` (10000) · `onesync_compressionDictionarySamples` (false) · `onesync_mapBoundsMinX/MinY` (-10000) · `onesync_mapBoundsMaxX/MaxY` (65536) · `onesync_mapCellAreaSize` (100) · commands `voice_internal`, `voice_external_connect`, `voice_external_host`, `sync_start_recording`, `sync_stop_recording`, `replay_start`, `replay_stop`. Details: [gta5-enhanced.md](gta5-enhanced.md). None of these exist in the public Legacy source.
+`sv_syncTickRate` (60, 1–120) · `sv_resourceFileDownloadTimeout` (2 min) · `sv_ioThreads` (0 = auto 2–4, startup) · `sv_clientConnectingTimeoutMilliseconds` (60000) · `sv_clientConnectedTimeoutMilliseconds` (120000) · `sv_pingIntervalMilliseconds` (5000) · `sv_voiceChat` (false) · `sv_mumble` (false, setr, deprecated) · `sv_devMode` (false; max 8 slots) · `onesync_migrateDataTimeout` (10000) · `onesync_compressionDictionarySamples` (false) · `onesync_mapBoundsMinX/MinY` (-10000) · `onesync_mapBoundsMaxX/MaxY` (65536) · `onesync_mapCellAreaSize` (100) · commands `voice_internal`, `voice_external_connect`, `voice_external_host`, `sync_start_recording`, `sync_stop_recording`, `replay_start`, `replay_stop`. Details: [gta5-enhanced.md](gta5-enhanced.md). Also (early access, see gta5-enhanced.md 5b): `sv_disconnectOnUnhandledNetEvent` (false) · `onesync_maxNearbyVehicles/Peds/Objects/Players/Other` (~256/256/512, defaults are the maximums) · `onesync_multithreadedPacketProcessing` (true) · `sv_enableCoreclrSandboxing` (dev mode only). None of these exist in the public Legacy source.
 
 ## 9. Server-list `sets` keys and common resource convars
 | Key | Example | Notes |
@@ -242,6 +243,7 @@ Enhanced extra: `sync_start_recording`, `sync_stop_recording`, `replay_start`, `
 | `add_filesystem_permission <resA> write <resB>` | Cross-resource writes |
 | `add_unsafe_worker_permission <resource>` | Node workers |
 | `add_unsafe_child_process_permission <resource>` | Node child processes |
+- `add_ace` / `remove_ace` / `add_principal` / `remove_principal` refuse to modify the principal that is currently executing them ("Changing ones own access is not permitted."); a resource cannot self-grant through its own `resource.<name>` principal. `ExecuteCommand('set ...')` from a resource needs `add_ace resource.<res> command.set allow`.
 Concepts and examples: [server-ops.md](server-ops.md) §6–7.
 
 ## 13. Sources

@@ -94,7 +94,7 @@ With ox_inventory: `ensure ox_lib` → `oxmysql` → `esx_lib` → `es_extended`
 |---|---|---|
 | `Config.Locale` | convar `esx:locale` → txAdmin locale → `"en"` | |
 | `Config.LocaleFallback` | convar `esx:localeFallback` ≠ `"false"` | missing keys fall back to English |
-| `Config.CustomInventory` | `false`; auto `"ox"` when ox_inventory is present | other inventories set their own value |
+| `Config.CustomInventory` | `false`; auto `"ox"` when `GetResourceState('ox_inventory') ~= 'missing'` (an installed but stopped/unused ox_inventory folder still switches ESX to ox mode and disables the default inventory: remove the folder if you don't run it; es_extended `shared/config/main.lua`) | other inventories set their own value |
 | `Config.Accounts` | `bank`, `black_money`, `money` (`label`, `round`) | adding an account here adds it to every player |
 | `Config.StartingAccountMoney` | `{ bank = 50000 }` | |
 | `Config.StartingInventoryItems` | `false` | table `{ bread = 2 }` (default inventory only) |

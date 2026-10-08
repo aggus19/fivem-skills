@@ -25,6 +25,7 @@ Related: [convars-and-commands.md](convars-and-commands.md) (every convar/comman
 - On 2026-10-07: `recommended` 35245 (txAdmin 8.1.1), `latest` 37150 (txAdmin 8.1.1). Windows file `server.7z` on the download page (the API's `*_download` URLs point to `server.zip`); Linux `fx.tar.xz`. Enhanced: `cfx-server_win_x64` / `cfx-server-linux_x64`.
 - Support policy (docs): Recommended supported until **6 weeks** after the next Recommended; Latest until **2 weeks** after the next build. Unsupported builds older than **3 months** are not joinable from the server browser; players see grey **EOS** (still joinable) or red **EOL** (connection fails) warnings.
 - **Hard cutoff 2026-10-15**: from 35245 the client always runs the latest GTA V executable and loads only the DLCs requested by `sv_enforceGameBuild`; servers older than 35245 can't be joined after 2026-10-15 (`sv_replaceExeToSwitchBuilds` is fully deprecated).
+- Qbox's install guide says: "Do not use the buttons at the top. Download directly from the list" of the runtime.fivem.net artifacts index (https://docs.qbox.re/installation). Pick the Recommended build number from the API/download page and download that exact build from the list.
 - Selection rule: production = **Recommended** (or a Latest you've tested on staging if you need a specific fix); staging = Latest. Never run builds whose `support_policy_eol` date is near. Re-check the API before every update.
 
 ```bash
@@ -193,7 +194,7 @@ set steam_webApiKey ""                   # only if you need steam: identifiers
 Why some lines are **not** there:
 - No `set onesync on`, `onesync_enableInfinity`, `sv_experimental*`, `sv_replaceExeToSwitchBuilds` → removed/forced (§13).
 - No `sv_master1 ""` unless you want a private server: docs say it only disables joining from the browser, the source (GameServer.cpp) skips listing heartbeats when it's empty — either way, not for public servers.
-- No `rcon_password` → RCON disabled (txAdmin console is safer).
+- No `rcon_password` → RCON disabled (txAdmin console is safer). Agents/tools that need console access on a dev box: see [ai-dev-workflow-and-mcp.md](ai-dev-workflow-and-mcp.md) (RCON wire format, txAdmin console API, risks).
 - Secrets never in `setr`/`sets` (those are sent to clients / the public `info.json`).
 - `sv_authMaxVariance` (1–5, default 5) / `sv_authMinTrust` (1–5, default 1) filter identity providers by how stable/spoof-proof they are; 5 trust means e.g. external three-way auth, so high values can lock out everyone. Keep defaults unless you have tested; the exact provider → level mapping is **UNVERIFIED**.
 - `set inventory:framework` is just an example of a resource convar — use each resource's documented names.
@@ -251,6 +252,8 @@ add_unsafe_child_process_permission "my_tool_res"      # allow child_process (e.
 Use `add_convar_permission` to hide secrets (`mysql_connection_string`, webhooks) from all but the resource that needs them.
 
 ## 8. Update procedure and rollback
+Before updating artifacts, check the community list of known-broken builds: https://github.com/jgscripts/fivem-artifacts-db (`db.json`; e.g. 35186-35214 Lua `io.readdir` errors that break ox_lib `getFilesInDirectory`/locales, 31689 server `GetVehiclePedIsIn` returns 0, 28626 packet loss, 27783-27938 SIGSEGV). Keep the previous artifact folder for rollback.
+
 1. Read the changelog/forum for breaking changes; check the API for the new Recommended.
 2. Test on staging (same resources, copy of DB).
 3. Backup: `mysqldump`, `server-data` (git commit), `txData`.

@@ -54,6 +54,8 @@ this_is_a_map 'yes'
 -- only when the .ytyp must be requested explicitly (custom archetypes used by other ymaps / props)
 data_file 'DLC_ITYP_REQUEST' 'stream/my_mlo.ytyp'
 ```
+- `data_file 'DLC_ITYP_REQUEST'` is resolved by **base name**: the loader strips folders and the extension (`stream/sub/my_mlo.ytyp` becomes `my_mlo`, `LoadStreamingFile.cpp` `ParseBaseName`). So `'my_mlo.ytyp'` and `'stream/my_mlo.ytyp'` both work, `.ytyp` files under `stream/` need no `files{}` entry, and two resources shipping the same `.ytyp` name collide.
+- A pack with only `.ymap`/`.ytyp`/`.ybn` and no `.ydr`/`.ydd`/`.ytd` is missing its geometry (incomplete download), not misconfigured.
 - **MLO** = `.ytyp` (archetype with interior: rooms, portals, entity sets) + `.ymap` placing the MLO instance + `.ybn` collisions (shell + per-room) + `.ydr`/`.ytd` assets. Since Sollumz 2.9 you can also create MLO instances directly in YMAPs from Blender.
 - Removing vanilla buildings: ship a modified copy of the vanilla `.ymap` (CodeWalker "Save as" into your resource) or use entity-removal techniques; never stream a whole modified vanilla area if a small ymap suffices.
 - Overlaps: two MLOs or an MLO over a vanilla interior → flickering, missing collisions, "falling through floor". Disable the vanilla IPL first (§4).

@@ -157,6 +157,7 @@ Notes:
 - Under `sv_entityLockdown strict` client spawning is already blocked; `entityCreating` then mainly guards population and server-side spawns from other resources.
 - `NetworkGetFirstEntityOwner` returns the first owner ID (docs) — treat non-positive values as server/population.
 - Don't do heavy work (DB calls, `Wait`) inside these handlers — they run on the sync path; queue logging.
+- Known gaps: objects created by **scenarios** (e.g. `WORLD_HUMAN_CONST_DRILL`) replicate without firing `entityCreating`/`entityCreated` (citizenfx/fivem#3675, open), so lockdown/`entityCreating` filters don't see them; consider `block_net_game_event` for scenario abuse and watch object counts. Undisclosed client crash methods are reported regularly (#3722): stay on the Recommended artifact and update promptly.
 
 ## 5. Built-in hard blocks
 - `block_net_game_event "FIRE_EVENT"` (server.cfg / console) drops a game event type entirely, before scripts see it; `unblock_net_game_event` reverses. Names come from the Net Game Events list (e.g. `GIVE_WEAPON_EVENT`, `REMOVE_WEAPON_EVENT`, `BLOCK_WEAPON_SELECTION`). Use only for event types no resource on your server needs.

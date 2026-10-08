@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — 2026-10-08
+Community-skill review: about 40 public GitHub repos (FiveM skills, rules, plugins, MCP servers) were cloned and read; ~400 of their claims were checked against primary sources. Only CONFIRMED items were merged; wrong or outdated claims were recorded as "common wrong advice" in `use-vs-avoid.md`. Full evidence trail: `docs/community-analysis/`.
+
+- New references: `ai-dev-workflow-and-mcp.md` (RCON, server HTTP endpoints, txAdmin API, MCP comparison and risks), `resource-architecture-and-release.md`. References: 47 → 49.
+- New scripts: `rcon.py`, `server_info.py` (stdlib only, offline tests).
+- `audit.py`: +24 rules (73 in total): newer backdoor IOC families, dropper-name false-positive fix, split `RegisterNetEvent`/`AddEventHandler` detection, `.cfg` semicolon splitting, HTML scan.
+- Corrections: `sv_endpointPrivacy` is removed (2026-07-08); "remove before add" replaced by "no yield between check and mutations"; Enhanced detection via `gamename`, `kvdb-migrator` exists; oxmysql batch transactions commit on 0 affected rows; oxmysql cannot use MariaDB ed25519 auth; Lua nesting limit for event payloads; `;` splitting in server.cfg.
+- Tests: 14 → 35 passing.
+
 ## 1.1.0 — 2026-10-07
 Deep research expansion (12 parallel research passes over primary sources: GitHub source/releases, npm, docs.fivem.net, forum.cfx.re, official framework docs).
 

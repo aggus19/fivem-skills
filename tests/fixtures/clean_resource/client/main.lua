@@ -1,0 +1,1 @@
+TriggerServerEvent('clean:report', 'water')

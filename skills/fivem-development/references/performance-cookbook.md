@@ -21,6 +21,7 @@ Every "after" assumes `shared_script '@ox_lib/init.lua'` in the manifest when it
 14. Leaking entities → tracked + cleaned up
 15. Memory and timing probes
 16. JS `setTick` → interval
+17. Client data bootstrap → server push + view cache
 
 ## 1. Marker + key loop → `lib.points`
 Before (client) — ~0.10–0.30 ms always, even across the map:
@@ -458,6 +459,37 @@ clearInterval(interval);
 ```
 Use `setTick` only for real per-frame natives, and `clearTick(handle)` as soon as they are no longer needed.
 
+## 17. Client data bootstrap → server push + view cache
+Before — every client pulls on start; each pull hits SQL and rebuilds the payload (N players = N queries; the endpoint is spam-able):
+```lua
+-- client
+CreateThread(function() Wait(2000) TriggerServerEvent('myres:server:requestSync') end)
+-- server
+RegisterNetEvent('myres:server:requestSync', function()
+    local rows = MySQL.query.await('SELECT * FROM myres_points')
+    TriggerClientEvent('myres:client:sync', source, buildList(rows))
+end)
+```
+After — build once, push, patch deltas:
+```lua
+local View = {}                      -- client-ready payload keyed by tostring(id); built at start / on CRUD only
+CreateThread(function()
+    for _, row in ipairs(MySQL.query.await('SELECT id, label, coords FROM myres_points') or {}) do
+        View[tostring(row.id)] = { id = row.id, label = row.label, coords = json.decode(row.coords) }
+    end
+    TriggerClientEvent('myres:client:seed', -1, View)   -- covers `ensure` restarts; nobody online at boot
+end)
+AddEventHandler('QBCore:Server:PlayerLoaded', function(player)  -- ESX: 'esx:playerLoaded'(playerId); standalone: 'playerJoining'
+    TriggerClientEvent('myres:client:seed', player.PlayerData.source, View)
+end)
+-- CRUD (after the DB write succeeded): patch one key, send one delta
+local function upsert(row)
+    local key = tostring(row.id)
+    View[key] = { id = row.id, label = row.label, coords = row.coords }
+    TriggerClientEvent('myres:client:upsert', -1, View[key])
+end
+```
+Rules: never rebuild/sort/query inside the per-player send; large views (> a few KB) go out with `TriggerLatentClientEvent(name, target, bps, View)`; keys as strings so the table stays a msgpack map. Also handle the client's own resource restart (state bag / `isLoggedIn` check) since the player-loaded event won't fire again.
 ## Sources
 - Natives verified via `scripts/natives.py show` (DrawMarker, IsControlJustReleased, GetGamePool, DoesEntityExist, GetEntitySpeed, DisableControlAction, HideHudComponentThisFrame, AddStateBagChangeHandler, GetEntityFromStateBagName, CreateVehicleServerSetter, DeleteEntity, GetPlayerPed, GetEntityCoords, RegisterKeyMapping, StartShapeTestLosProbe) — https://docs.fivem.net/natives/
 - ox_lib source (points, cache, onCache, addKeybind, disableControls, raycast, triggerClientEvent, getNearbyVehicles, cron): https://github.com/overextended/ox_lib

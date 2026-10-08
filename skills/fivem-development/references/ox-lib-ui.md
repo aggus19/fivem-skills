@@ -242,7 +242,7 @@ end)
 Global items are removed automatically when the resource that added them stops. While the radial is open, controls 1, 2, 142, 199 and 200 and firing are disabled.
 
 ## 11. Clipboard, NUI focus, settings, zone creator
-- `lib.setClipboard(text)` copies text to the player's clipboard through NUI.
+- `lib.setClipboard(text)` copies text to the player's clipboard through NUI. It silently does nothing if another NUI page currently holds focus, and line breaks must be written as `\t\n` (plain `\n` is dropped). Source: https://overextended.dev/docs/ox_lib (Interface, Clipboard)
 - `lib.setNuiFocus(allowInput, disableCursor?)` and `lib.resetNuiFocus()` are the focus helpers ox_lib uses for its own UI. `resetNuiFocus` restores the previous `SetNuiFocusKeepInput` state. Use them if you open ox_lib UI from inside your own NUI flow.
 - **`/ox_lib`** is a player command. It opens a settings dialog for notification audio, notification position and, when `ox:userLocales` is 1, the UI language. The choices are stored in client KVP. A locale change fires `ox_lib:setLocale` on that client, and every resource that loaded the `locale` module reloads its strings.
 - **`/zone poly|box|sphere [useLast]`** is a client zone creator restricted to ACE `command.zone`. It saves to `ox_lib/created_zones.lua` in three formats: `lib.zones.*` call, array, or `exports.ox_target:add*Zone`. The server also checks `IsPlayerAceAllowed(source, 'command')` before writing the file.

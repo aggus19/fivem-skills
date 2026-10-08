@@ -86,9 +86,9 @@ Other resources (garages, HUDs) should read/write this state instead of LegacyFu
 | Repo | Status |
 |---|---|
 | `ox_lib` 3.40.0, `oxmysql` 2.14 | maintained (see ox-lib.md, database-oxmysql.md) |
-| `ox_banking` v1.0.6 (2026-04-24, MIT) | maintained; banking UI for **ox_core only** (shared/group accounts, transactions, invoices) |
+| `ox_banking` v1.0.6 (2026-04-24, MIT) | maintained; banking UI for **ox_core only** (shared/group accounts, transactions, invoices). TypeScript; its only script API is client `exports.ox_banking:openBank()` and `exports.ox_banking:openAtm()`. Wages, fines and transfers go through ox_core accounts (ox-core.md section 8), not ox_banking (source: `src/client/index.ts`) |
 | `ox_mdt` | **work in progress**, only 2023 pre-releases (v0.3.0), ox_core only — not production-ready |
-| `ox_commands` | no releases (`version '0.0.0'`), admin/utility commands; pushed 2026-04 |
+| `ox_commands` | no releases (`version '0.0.0'`), admin/utility commands; pushed 2026-04. Server `/freeze`, `/thaw` (`lib.addCommand`, restricted); client `/goback`, `/tpm`, `/setcoords`, `/coords`, `/noclip`, car menu |
 | `ox_types`, `fivem-lls-addon`, `cfxlua-vscode`, `rage-lua-natives`, `fivem-ts`, `ox`, `fx-utils` | tooling (types, LLS natives, TS boilerplate) |
 | `txAdminRecipe` | ox_core server recipe |
 | `ox_inventory_v3` | TS/Svelte rewrite "for testing purposes only" (last push 2025-04) |

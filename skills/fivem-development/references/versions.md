@@ -1,4 +1,4 @@
-# Version baseline — verified 2026-10-07
+# Version baseline — verified 2026-10-07 (community-review corrections 2026-10-08)
 
 Every value below was checked against primary sources (GitHub releases/tags/source, npm registry, docs.fivem.net, forum.cfx.re, the artifact API) on **2026-10-07**. When exact versions matter, re-check (see "How to re-verify") or ask which versions the user's server runs. Topic files carry their own "Baseline:" header with details.
 

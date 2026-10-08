@@ -93,6 +93,8 @@ local pd = Player.PlayerData
 ```
 Since 2026-05 the player is a metatable class; `Player.Functions.X(...)` still works (wrappers), and the export interface also exposes methods at top level (`Player.SetPlayerData(...)`).
 
+Internally methods are defined as `function Player:AddMoney(...)`, but **from another resource always use the dot form** (`Player.Functions.AddMoney('cash', 5)` or, on the `exports['qb-core']:GetPlayer(src)` interface, `Player.AddMoney('cash', 5)`). Those are pre-bound wrappers (`buildMethodTable`/`buildInterface` in `server/player.lua`); calling them with a colon passes the table as the first argument (`moneytype`) and errors, and metatable methods do not survive the export boundary. Source: https://github.com/qbcore-fivem/qb-core/blob/main/server/player.lua
+
 | `Player.Functions.*` | Notes |
 |---|---|
 | `AddMoney(type, amount, reason?)` | `true`; `false` unknown type; `nil` if amount < 0/invalid. Fires `QBCore:Server:OnMoneyChange`, client `QBCore:Client:OnMoneyChange`, `hud:client:OnMoneyChange`, `qb-log` |
@@ -155,6 +157,8 @@ end)
 QBCore.Functions.TriggerCallback('myres:server:getStock', function(stock) end, 'shop1')
 -- client: await style (2025-01+; omit the function, must run inside a thread/handler)
 local stock = QBCore.Functions.TriggerCallback('myres:server:getStock', 'shop1')
+-- gotcha: the pending promise is stored by callback NAME (QBCore.ServerCallbacks[name]); two concurrent calls with the
+-- same name on one client overwrite each other. Serialize them, or use lib.callback (qb-core client/functions.lua).
 
 -- server -> client
 QBCore.Functions.CreateClientCallback('myres:client:getHeading', function(cb) cb(GetEntityHeading(PlayerPedId())) end) -- client
@@ -374,7 +378,7 @@ Quick compatibility grep for old resources: `QBShared`, `QBConfig`, `GetSharedIt
 
 ## 12. Best practices and common mistakes
 - `local src = source` first; `GetPlayer(src)` and nil-check every time; never accept a citizenid/source/price/amount from the client without validating it.
-- Use `Player.Functions.RemoveMoney` return values; remove before add; re-check item count with `HasItem`/`GetItemCount` on the server.
+- Use `Player.Functions.RemoveMoney` return values; no yield between the check and the mutations (else take/verify first, grant after, refund on failure); re-check item count with `HasItem`/`GetItemCount` on the server.
 - `CreateUseableItem` callbacks receive the server-side item (qb-inventory ≥ 2026-05); still validate `item.info`.
 - Prefer server vehicle creation (`QBCore.Functions.CreateVehicle`) and send the netId; give keys via `exports['qb-vehiclekeys']:GiveKeys(src, plate)` server-side.
 - Use ACE (`HasPermission`) for admin actions; `Config.Server.Permissions` must match server.cfg principals.

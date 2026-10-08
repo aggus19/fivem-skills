@@ -9,13 +9,13 @@ Skill para agentes de IA (Claude Code, OpenAI Codex, Cursor y otras herramientas
 | Área | Contenido |
 |---|---|
 | **SKILL.md** | Reglas no negociables (autoridad del servidor, no inventar natives, detectar el stack, APIs actuales, presupuesto de rendimiento, licencias), tabla de ruteo a referencias y flujos de trabajo (crear, modificar, auditar, convertir, optimizar). |
-| **47 referencias (~11.900 líneas)** | **Plataforma:** versiones y línea de tiempo de cambios · server.cfg/instalación/ACE · todas las convars y comandos con valores recomendados · txAdmin completo · OneSync/entidades/state bags/routing buckets · GTA V Enhanced. **Scripting:** fxmanifest (todas las directivas) · runtimes CfxLua 5.4.8/JS/TS/C# · todos los eventos nativos · guía de natives + 699 natives esenciales verificadas · NUI/DUI · tooling · debugging. **ox:** ox_lib completo en 6 archivos (UI, core, world, utilidades, JS) · oxmysql · optimización de bases de datos (MariaDB/MySQL, índices, my.cnf, backups) · ox_inventory · ox_target · ox_core · ox_doorlock/ox_fuel. **Frameworks:** Qbox + ecosistema qbx · ESX Legacy 1.15.2 + ecosistema · QBCore (refactor 2026) · ND/vRP · bridge multi-framework · recursos de la comunidad por categoría. **Gameplay:** patrones · diseño de sistemas RP · vehículos y handling · mapeo/streaming/ropa. **Calidad:** qué usar vs qué evitar · seguridad · anticheat · checklist de auditoría · rendimiento + cookbook + escalado de servidores grandes · licencias (PLA 2026‑09‑10). |
+| **49 referencias (~12.300 líneas)** | **Plataforma:** versiones y línea de tiempo de cambios · server.cfg/instalación/ACE · todas las convars y comandos con valores recomendados · txAdmin completo · OneSync/entidades/state bags/routing buckets · GTA V Enhanced. **Scripting:** fxmanifest (todas las directivas) · runtimes CfxLua 5.4.8/JS/TS/C# · todos los eventos nativos · guía de natives + 699 natives esenciales verificadas · NUI/DUI · tooling · debugging. **ox:** ox_lib completo en 6 archivos (UI, core, world, utilidades, JS) · oxmysql · optimización de bases de datos (MariaDB/MySQL, índices, my.cnf, backups) · ox_inventory · ox_target · ox_core · ox_doorlock/ox_fuel. **Frameworks:** Qbox + ecosistema qbx · ESX Legacy 1.15.2 + ecosistema · QBCore (refactor 2026) · ND/vRP · bridge multi-framework · recursos de la comunidad por categoría. **Gameplay:** patrones · diseño de sistemas RP · vehículos y handling · mapeo/streaming/ropa. **Calidad:** qué usar vs qué evitar · seguridad · anticheat · checklist de auditoría · rendimiento + cookbook + escalado de servidores grandes · licencias (PLA 2026‑09‑10). |
 | **Catálogo de natives** | `assets/natives/`: las **7.379** natives (6.436 GTA + 943 CFX) en 47 archivos por namespace, con firma Lua, lado, hash, build mínimo, nombres viejos y link a docs. Regenerable con `build_natives_catalog.py`. |
-| **5 scripts** (Python, sin dependencias) | `natives.py` (busca/verifica natives, incluye nombres viejos, detecta natives inventadas y del lado equivocado) · `build_natives_catalog.py` (regenera el catálogo) · `manifest.py` (valida fxmanifest) · `audit.py` (backdoors conocidos, SQLi, confianza en el cliente, XSS en NUI, webhooks expuestos, `.cfg` inseguros, loops sin Wait, APIs obsoletas) · `scaffold.py` (genera recursos). |
+| **7 scripts** (Python, sin dependencias): `rcon.py` y `server_info.py` para probar recursos contra un servidor; ver más abajo. Los otros 5: | `natives.py` (busca/verifica natives, incluye nombres viejos, detecta natives inventadas y del lado equivocado) · `build_natives_catalog.py` (regenera el catálogo) · `manifest.py` (valida fxmanifest) · `audit.py` (backdoors conocidos, SQLi, confianza en el cliente, XSS en NUI, webhooks expuestos, `.cfg` inseguros, loops sin Wait, APIs obsoletas) · `scaffold.py` (genera recursos). |
 | **Plantillas** | Recurso Lua con *bridge* que autodetecta Qbox / ESX / QBCore / standalone + ejemplo de tienda segura (las 5 validaciones del servidor) · NUI React 19 + Vite 8 + TypeScript 7 con target `chrome103` (CEF de FiveM Legacy). |
 | **Configs** | `.luarc.json` (LuaLS + addon FiveM), `selene.toml` + std `cfx.yml`, `.stylua.toml`, `server.cfg.example`, workflow de GitHub Actions. |
 | **Plugin de Claude Code** | Comandos `/fivem-new`, `/fivem-audit`, `/fivem-native` y el subagente `fivem-auditor`. |
-| **Tests** | `python -m unittest discover -s tests -v` (offline, 14 tests). |
+| **Tests** | `python -m unittest discover -s tests -v` (offline, 35 tests). |
 
 ## Datos clave del baseline (2026-10-07)
 
@@ -75,7 +75,7 @@ FiveM Skills/
 ├── .claude-plugin/        plugin.json + marketplace.json
 ├── skills/fivem-development/
 │   ├── SKILL.md
-│   ├── references/        47 documentos
+│   ├── references/        49 documentos
 │   ├── scripts/           natives.py · build_natives_catalog.py · manifest.py · audit.py · scaffold.py
 │   └── assets/
 │       ├── natives/       catálogo completo (47 archivos por namespace)
@@ -83,6 +83,7 @@ FiveM Skills/
 │       └── configs/       .luarc.json · selene.toml · cfx.yml · .stylua.toml · server.cfg.example · github-workflow.yml
 ├── commands/              /fivem-new · /fivem-audit · /fivem-native
 ├── agents/                fivem-auditor
+├── docs/community-analysis/  evidencia: análisis y verificación de ~40 repos públicos de skills/MCP de FiveM
 ├── evals/                 casos de evaluación de la skill
 ├── tests/                 tests offline de los scripts
 ├── AGENTS.md · CHANGELOG.md · LICENSE

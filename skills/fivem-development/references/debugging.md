@@ -84,7 +84,13 @@ Enhanced-only dev tools: `cl_drawResTimeGraphs`, `cl_drawResTimeWarnings`, `con_
 |---|---|---|
 | `SCRIPT ERROR: @res/file.lua:N: attempt to index a nil value (global 'ESX')` (or `QBCore`) | both | framework object not loaded: missing `@es_extended/imports.lua` / `GetCoreObject`, wrong `ensure` order, wrong side |
 | `attempt to index a nil value (field '?')` | both | data not ready (player not loaded, DB row missing); guard + wait for loaded event / `LocalPlayer.state.isLoggedIn` |
-| `attempt to call a nil value (field 'xxx')` | both | function/export typo, resource not started, defined on the other side |
+| `attempt to call a nil value (field 'xxx')` | both | function/export typo, resource not started, defined on the other side. A typo'd *native* does not fail at load: `_G.__index` resolves natives lazily via `Citizen.LoadNative` and caches misses in `nilCache`, so the error appears only when that line runs (possibly a rare branch); run `python scripts/natives.py check <res> --strict` (`natives_loader.lua`) |
+| `Warning: sending large event <name> (<N> bytes). This may cause performance issues. Consider using latent events instead.` | server | a server to client event >= 1,000,000 bytes (printed at most every 5 s): `TriggerLatentClientEvent`, paginate, send ids (`ServerResources.cpp`) |
+| `Setting values on Entity is not supported at this time.` | both | `Entity(ent).foo = v`: use `Entity(ent).state.foo = v` / `:set()` (same for `Player`; `scheduler.lua`) |
+| `cannot set values on exports` / `cannot set values on an export resource` | both | assigning to `exports.x`: define with `exports('name', fn)` (`scheduler.lua`) |
+| `Couldn't find resource category <[name]>.` | server | `ensure [cat]` with no such bracket folder (`ServerResources.cpp`) |
+| `Server specified an invalid game build enforcement (N).` | client | unsupported `sv_enforceGameBuild` value (`NetLibrary.cpp`) |
+| `Reliable server command overflow.` (drop) | server | client spamming commands, e.g. a keybind loop (`ServerCommandPacketHandler.cpp`) |
 | `No such export xxx in resource yyy` | both | export not registered on this side, file not in manifest, resource name wrong, resource stopped |
 | `An error occurred while calling export \`xxx\` in resource \`yyy\`` | both | the export itself threw; read the nested stack (bug in the other resource or bad args) |
 | `event xxx was not safe for net` | both | net event handled with `AddEventHandler` only → use `RegisterNetEvent` (and validate!) |
@@ -138,6 +144,10 @@ Crash names shown by the FiveM crash dialog (e.g. `pasta-aspen-table`) are three
 **Performance**: `resmon` → `profiler` → fix → re-measure (`performance.md`).
 
 **NUI**: `nui_devtools` → Console (JS errors) and Network (failed `https://<resource>/callback` fetches → callback not registered or wrong resource name; `GetParentResourceName()` in JS).
+
+**Automating the loop (AI agents, CI)**: see [ai-dev-workflow-and-mcp.md](ai-dev-workflow-and-mcp.md) (RCON, `/info.json`, txAdmin API, community MCP servers and their risks).
+- NUI automation: the CEF remote-debugging endpoint `http://127.0.0.1:13172/json` lists one target per NUI frame (`https://cfx-nui-<resource>/...`); any Chrome DevTools Protocol client (Chrome "inspect", Playwright `connectOverCDP`) can query the DOM, click and record network calls. Localhost only; dev use.
+- Server console capture from Lua: `RegisterConsoleListener(function(channel, message) ... end)` (server) receives all console output and `GetConsoleBuffer()` (server) returns the current console buffer — useful for in-game log viewers and diagnostics resources. Keep such tooling out of production.
 
 ## 9. Crash dumps
 - Client full dump: add `EnableFullMemoryDump=1` to `CitizenFX.ini`, reproduce (the game may freeze minutes while writing), Explorer opens `crashes\` with the dump selected; zip it; remove the line afterwards (dumps are 1–10 GB).

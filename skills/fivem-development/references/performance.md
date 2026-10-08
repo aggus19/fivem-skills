@@ -71,6 +71,7 @@ profiler save <file> / profiler load <file>   -- internal msgpack format
 
 ## 3. Client threads and dynamic sleep
 - Never `while true do` without `Wait`. `Wait(0)` = every frame; only while drawing, reading per-frame input or calling `*ThisFrame` natives.
+- `Wait(0)` resumes on the next frame, so cost scales with FPS (60 fps = 16.6 ms/tick, 180 fps = 5.5 ms). Per-frame work must use `Wait(0)`: `Wait(5)`/`Wait(10)` silently skips frames for high-FPS players. Everything else should use adaptive waits (>= 250-1000 ms when far). Source: https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/Citizen.Wait/
 - **Dynamic sleep:** compute `sleep` per iteration (far → 1000–2000, near → 250–500, inside → 0).
 - **One thread per concern**, iterating a table of points, instead of one thread per point/entity.
 - Stop threads when not needed (flag checked each loop, or break and start a new one on enter).
@@ -100,6 +101,8 @@ Each native call crosses the script ↔ game boundary (argument marshalling). Ch
 | `GetHashKey('x')` in loops | string hash at runtime | backtick `` `x` `` (compile-time, zero overhead) |
 | `GetActivePlayers()` + `GetPlayerPed` loop every frame | allocs + N natives | throttle to 500 ms |
 | Model/anim requests in loops | streaming churn | `lib.requestModel`, then `SetModelAsNoLongerNeeded` |
+
+- Don't store `PlayerPedId()` in a file-level local: the handle changes after `SetPlayerModel` (clothing/appearance menus, respawn scripts) and old references become invalid. Read it per use, or use ox_lib `cache.ped` (refreshed by ox_lib) / ESX `esx:playerPedChanged`. Source: https://docs.fivem.net/natives/?_0xD80958FC74E988A6 and https://docs.fivem.net/natives/?_0x00A1CADD00108836
 
 **Per-frame-only natives** (effect lasts one frame — they legitimately need `Wait(0)`; batch them into **one** thread and only while needed):
 `DrawMarker`, `DrawText`-family (`BeginTextCommandDisplayText`/`EndTextCommandDisplayText`), `DrawSprite`, `DrawLightWithRange`, `DisableControlAction`, `HideHudComponentThisFrame`, `SetPedDensityMultiplierThisFrame`, `SetVehicleDensityMultiplierThisFrame`, `SetRandomVehicleDensityMultiplierThisFrame`, `SetParkedVehicleDensityMultiplierThisFrame`, `SetScenarioPedDensityMultiplierThisFrame`, and `IsControlJustPressed/Released` polling.

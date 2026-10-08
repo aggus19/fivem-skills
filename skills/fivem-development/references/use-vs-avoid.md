@@ -18,7 +18,8 @@ Baseline: FXServer Legacy 35245 / Latest 37150, game build 3889, CfxLua 5.4, Nod
 13. Server operations and hosting
 14. Monetisation and policy
 15. Tooling
-16. Sources
+16. Common wrong advice found in community skills
+17. Sources
 
 ## 1. Platform, manifest and runtimes
 | AVOID | USE | Why |
@@ -157,7 +158,7 @@ Baseline: FXServer Legacy 35245 / Latest 37150, game build 3889, CfxLua 5.4, Nod
 | AVOID | USE | Why |
 |---|---|---|
 | client-side permission checks only | server ACE/framework checks | UX ≠ security |
-| add-then-remove | remove-before-add + per-player lock | dupes |
+| grant across a yield before verifying/taking | no yield between check and mutations, else take/verify first + refund on failure; per-player lock | dupes |
 | unbounded arguments | type checks, clamps, NaN/inf rejection, length caps | crashes, exploits |
 | no rate limit on sensitive actions | token bucket per player/action | spam, dupes |
 | banning on single noisy signal | score + evidence + review; auto-ban only honeypots/impossible values | false bans |
@@ -182,7 +183,8 @@ Baseline: FXServer Legacy 35245 / Latest 37150, game build 3889, CfxLua 5.4, Nod
 | txAdmin port 40120 open to the world | firewall allow-list / VPN / TLS reverse proxy | panel brute force |
 | editing txAdmin files / copying from `master` | official artifact releases | tampering, mismatches |
 | real server IP on the list behind a proxy | `sv_forceIndirectListing`, `sv_listingHostOverride`, `sv_endpoints` | DDoS targeting |
-| public player IPs | `sv_endpointPrivacy true` | privacy |
+| `sv_endpointPrivacy` / `sv_exposePlayerIdentifiersInHttpEndpoint` in server.cfg | delete them (removed 2026-07-08; IPs are never exposed on HTTP endpoints) | convars now only warn at boot |
+| `sv_enableDevtools` | nothing (convar does not exist; feature request citizenfx/fivem#2667). Enhanced: `sv_devMode false` | community guides recommend it; it's a no-op |
 | no backups / untested restores | scheduled offsite DB backups + restore tests | dupes/infections need rollback |
 | `resources/` without version control | Git (detect injected files) | backdoor detection |
 
@@ -202,7 +204,21 @@ Baseline: FXServer Legacy 35245 / Latest 37150, game build 3889, CfxLua 5.4, Nod
 | plain editor with no FiveM typings | VS Code + CfxLua extension / fivem-lls-addon, `@citizenfx/*` typings | catches native/API mistakes |
 | shipping unreviewed changes | `natives.py check --strict`, `manifest.py`, `audit.py` in CI (`--json`) | regressions, exploits |
 
-## 16. Sources
+## 16. Common wrong advice found in community skills
+Claims verified wrong against primary sources (2026-10-07). Use as red flags when reviewing generated or third-party guidance.
+| Claim seen in community skills | Reality |
+|---|---|
+| `dependency '/res'` marks an optional dependency | A leading `/` is a constraint (`/server:<build>`, `/onesync`, `/gameBuild:<n>`, `/policy:`); there are no optional dependencies — check `GetResourceState` at runtime instead |
+| Pass vectors as `{x,y,z}` tables over events | Lua↔Lua events keep `vector3/4`/`quat` (msgpack ext); only Lua↔JS needs tables |
+| `.await` (oxmysql/lib.callback) deadlocks in an event handler | Net/event handlers already run in a coroutine; `.await` is fine there |
+| `SetRoutingBucketPopulationEnabled` is off by default | Population is on in every bucket by default (`noPopulation = false`); disable it explicitly for instances |
+| `GetEntityCoords` is client-only | A server version exists (OneSync, 1 argument) |
+| `nui_devtools true` in server.cfg | It is a client console command / http://localhost:13172 |
+| Leading-underscore natives are called as `_Name` | Codegen strips it: `_GET_X` → `GetX`; only `_<digit>` parts keep the underscore (`GetGroundZFor_3dCoord`) |
+| `resmon` in the server console | Client command; the server uses `profiler record/save/view` |
+| `QBX:Client:OnPlayerLoaded` events | Qbox fires `QBCore:Client:OnPlayerLoaded` and `qbx_core:client:*` events |
+| `Player(PlayerId()).state` on the client | `Player()` expects a **server ID**; use `LocalPlayer.state` |
+## 17. Sources
 - Version and deprecation sources: [versions.md](versions.md)
 - Secure your events: https://docs.fivem.net/docs/developers/server-security/
 - Server commands / convars: https://docs.fivem.net/docs/server-manual/server-commands/ · https://docs.fivem.net/docs/scripting-reference/convars/

@@ -26,6 +26,7 @@ Baseline: FXServer Legacy 35245 / citizenfx/fivem master `a74c2cc` (2026-10-07),
 | large payload | `TriggerLatentServerEvent(name, bps, ...)` / `TriggerLatentClientEvent(name, target, bps, ...)` | same handlers | `TriggerLatent*` globals |
 
 - `RegisterNetEvent(name[, handler])` marks the event **safe for net** and (optionally) adds the handler. Without it, network triggers are dropped with "event X was not safe for net". `RegisterServerEvent` is a legacy alias.
+- The safe-for-net flag is **per resource** (each resource's Lua runtime keeps its own handler table). A resource that only `AddEventHandler`s a net event fired by another resource or by the server — e.g. client `esx:playerLoaded`, a passive logger listening to another resource's client→server event — receives nothing ("event X was not safe for net") unless it calls `RegisterNetEvent(name)` itself. Exception: `@es_extended/imports.lua` already registers `esx:playerLoaded` inside your resource. A listener that registers a client→server event becomes a client-callable endpoint too: treat its payload as untrusted. Source: https://github.com/citizenfx/fivem/blob/master/data/shared/citizen/scripting/lua/scheduler.lua
 - `AddEventHandler` returns a handle → `RemoveEventHandler(handle)`. JS: `removeEventListener(name, cb)`.
 - Handlers run in their own coroutine (`Citizen.CreateThreadNow`): you can `Wait`/await inside, but **capture `local src = source` first**.
 - C#: `[EventHandler("name")]` or `EventHandlers["name"] += new Action<...>(...)`; `[FromSource] Player player` (server) gets the sender. All C# handlers are net-callable — validate.
@@ -61,6 +62,10 @@ Baseline: FXServer Legacy 35245 / citizenfx/fivem master `a74c2cc` (2026-10-07),
 | `__cfx_internal:commandFallback`, `__cfx_internal:httpResponse` | internal | | | Don't handle. |
 
 Network game events (also server) are in §5.
+
+**Connection-phase rules:** call `deferrals.done()` on *every* branch, including DB errors and timeouts (wrap awaits in `pcall`; on failure `deferrals.done('Auth unavailable')` = fail closed); reject when `GetPlayerIdentifierByType(src, 'license')` is nil; match bans on several identifiers (license, license2, fivem, discord, tokens via `GetPlayerToken`), not one; never interpolate the player name into `presentCard` JSON unescaped; expire connection-phase tables by time, not only in `playerDropped`.
+**Same event name in two resources:** handlers are global, so every resource's handler for that name runs (no shadowing). Namespace names (`res:side:action`) so a generic name doesn't trigger someone else's logic.
+**Resource stop:** keep `onResourceStop` / `onClientResourceStop` cleanup synchronous (no `Wait`, await or callbacks): the script runtime is being torn down and code after a yield may never run (**UNVERIFIED** in source, widely observed). Clear NUI focus, delete tracked entities and blips, and stop loops directly.
 
 ## 4. Built-in core events — client
 | Event | Params | Cancel | Notes |
@@ -129,6 +134,7 @@ These come from Cfx default resources and are **client-originated** — a cheate
 - `CancelEvent()` inside a handler; `WasEventCanceled()` after `TriggerEvent` (same side) to see if any handler cancelled.
 - Works only for events whose emitter checks it: `playerConnecting` (before yield), `onResourceStarting`, `entityCreating`, `populationPedCreating`, all §5 net game events, `chatMessage`, `rconCommand`, and your own events where you check `WasEventCanceled()`.
 - Cancelling a normal net event does nothing for other handlers already queued.
+- `CancelEvent()` only sets the cancel flag: every other handler of that event (in your resource and in others) still runs, in unspecified order (`pairs`). After cancelling, `return`; never assume yours ran first or last. For net game events it stops routing to other clients, not other server handlers. Source: `scheduler.lua` event dispatch loop (link in §1).
 
 ## 8. Callbacks (request/response)
 Prefer **ox_lib** callbacks (any framework):
@@ -171,7 +177,7 @@ TriggerEvent('chat:addSuggestion', '/heal', 'Heal a player', { { name = 'id', he
 ## 10. Framework player-loaded events
 | Framework | Client | Server |
 |---|---|---|
-| Qbox | `QBCore:Client:OnPlayerLoaded`, `qbx_core:client:playerLoggedOut`, `QBCore:Client:OnJobUpdate`, `QBCore:Client:OnGangUpdate`, `qbx_core:client:onGroupUpdate`; state `LocalPlayer.state.isLoggedIn` | `QBCore:Server:OnPlayerLoaded`, `QBCore:Server:OnPlayerUnload`, `QBCore:Server:OnJobUpdate` (see `framework-qbox.md`) |
+| Qbox | `QBCore:Client:OnPlayerLoaded`, `qbx_core:client:playerLoggedOut`, `QBCore:Client:OnJobUpdate`, `QBCore:Client:OnGangUpdate`, `qbx_core:client:onGroupUpdate`; state `LocalPlayer.state.isLoggedIn` | `QBCore:Server:PlayerLoaded` (player object, server-local, fired by `CreatePlayer`), `QBCore:Server:OnPlayerLoaded` (net, client-sent — notification only), `QBCore:Server:OnPlayerUnload`, `QBCore:Server:OnJobUpdate` (see `framework-qbox.md`; source https://github.com/Qbox-project/qbx_core/blob/main/server/player.lua, v1.24.0) |
 | QBCore | `QBCore:Client:OnPlayerLoaded`, `QBCore:Client:OnPlayerUnload`, `QBCore:Client:OnJobUpdate`, `QBCore:Player:SetPlayerData` | `QBCore:Server:PlayerLoaded` (Player), `QBCore:Server:OnPlayerUnload` |
 | ESX | `esx:playerLoaded` (xPlayer data, isNew, skin), `esx:onPlayerLogout`, `esx:setJob` | `esx:playerLoaded` (playerId, xPlayer, isNew), `esx:playerDropped`, `esx:setJob` |
 | ox_core | `ox:playerLoaded`, `ox:playerLogout` | `ox:playerLoaded`, `ox:playerLogout` |
@@ -190,6 +196,8 @@ Handle **resource restart**: in your own `onResourceStart`, initialise for alrea
 | `latentEvent` | 75/s, burst 125 | |
 | `netCommand` / `netCommandSize` | 7/s burst 14 / 1 KiB/s burst 8 KiB | client → server commands |
 
+- Lua payloads nested 16 or more table levels deep arrive as `nil` with no error (`MP_MAX_NESTING 16`, see runtimes.md section 8): flatten them.
+- A server to client event of 1,000,000 bytes or more logs `Warning: sending large event <name> (<N> bytes)...` (at most every 5 s): use `TriggerLatentClientEvent`, paginate, or send ids.
 - Validate table sizes and string lengths on receipt; for state many clients observe, prefer state bags (`onesync-entities.md`).
 
 ## 12. Sources

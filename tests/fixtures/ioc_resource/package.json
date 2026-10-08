@@ -1,0 +1,5 @@
+{
+  "name": "ioc-fixture",
+  "scripts": { "postinstall": "node setup.js", "build": "vite build" },
+  "dependencies": { "left-pad": "git+https://example.test/left-pad.git" }
+}

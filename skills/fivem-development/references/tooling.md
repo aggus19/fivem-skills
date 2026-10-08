@@ -34,6 +34,8 @@ Then `.luarc.json` in the workspace (template: `assets/configs/.luarc.json`; edi
 ```
 `userThirdParty` = folder **containing** `fivem-lls-addon`; when LuaLS detects `fxmanifest.lua` it asks to apply the CfxLua addon ("Ask"). `workspace.library` gives completion for ox_lib (`lib.*`) and frameworks if their source is on disk. Commit a `.luarc.default.json` and gitignore personal paths.
 
+**Headless / CI / AI-agent runs:** `checkThirdParty: "Ask"` raises a prompt nobody can answer. Instead point `workspace.library` at the addon's `library` folder (e.g. `C:/dev/lua-addons/fivem-lls-addon/library`), copy `runtime.version`/`nonstandardSymbol` from its `config.json`, and set `"workspace.checkThirdParty": "Disable"`. The addon declares no manifest directives, so `fxmanifest.lua` reports `fx_version`, `client_scripts`... as undefined globals: add them to `diagnostics.globals` (or a small `---@meta` file) rather than ignoring the file, so typos like `client_scirpts` stay visible. Sources: https://github.com/overextended/fivem-lls-addon · https://luals.github.io/wiki/settings/
+
 ## 2. Formatting with StyLua (CfxLua syntax)
 - https://github.com/JohnnyMorganz/StyLua — v2.5.2. Release binaries include the `cfxlua` feature; **`syntax = "CfxLua"`** (added in 2.1.0) parses compound ops, `?.`, backtick hashes, `in` unpacking, set constructors and `/* */`.
 - Config `assets/configs/.stylua.toml` (4 spaces, 120 cols, `AutoPreferSingle`, `syntax = "CfxLua"`). Run `stylua .` / check `stylua --check .`.
@@ -134,6 +136,8 @@ selene is optional in CI because of CfxLua syntax (install the binary from its r
 | `block_net_game_event`, `rateLimiter_*` convars | server | See `events-and-callbacks.md`. |
 More: `debugging.md` (error catalogue) and `performance.md`.
 
+Offline doc mirror for grep (about 8 MB instead of the 274 MB full fivem-docs tarball): shallow sparse clones — `git clone --depth 1 --filter=blob:none --sparse https://github.com/citizenfx/fivem-docs <dir> && git -C <dir> sparse-checkout set content/docs`; same for `overextended/overextended.github.io` (`content/docs`: ox_lib, ox_inventory, ox_target, oxmysql, ox_core). Grep the huge `content/docs/game-references/*` tables, never read them whole. Fivemanage publishes an LLM index at https://docs.fivemanage.com/llms.txt (pages also served as `.md`).
+
 ## 9. Skill scripts (Python 3.8+, standard library only)
 | Script | Purpose |
 |---|---|
@@ -141,6 +145,8 @@ More: `debugging.md` (error catalogue) and `performance.md`.
 | `scripts/manifest.py` | validate `fxmanifest.lua` vs files on disk |
 | `scripts/audit.py` | heuristic security/performance/compat audit |
 | `scripts/scaffold.py` | create a resource from templates (bridge, optional NUI) |
+| `scripts/rcon.py` | send one RCON command over UDP (password from env `FIVEM_RCON_PASSWORD`; dev servers only; see [ai-dev-workflow-and-mcp.md](ai-dev-workflow-and-mcp.md)) |
+| `scripts/server_info.py` | summarise `/info.json`, `/dynamic.json`, `/players.json` (+ `--resource` started-check, `--getinfo`) without credentials |
 
 ## 10. Sources
 - https://github.com/overextended/fivem-lls-addon (README, `config.json`, `plugin.lua`) · https://github.com/overextended/cfxlua-vscode (discontinued notice) · https://github.com/LuaLS/lua-language-server/releases · https://github.com/LuaLS/LLS-Addons (`addons/fivem`)

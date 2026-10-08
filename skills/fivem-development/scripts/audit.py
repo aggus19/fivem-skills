@@ -3,7 +3,7 @@
 
 Heuristic scanner: it finds *candidates* for review, it does not prove a bug.
 Every finding must be confirmed by reading the code (see references/audit-checklist.md).
-Scans code (.lua/.js/.ts/.tsx/.jsx/.vue/.svelte/.cs), fxmanifest.lua, *.cfg files and known dropper file names.
+Scans code (.lua/.js/.ts/.tsx/.jsx/.vue/.svelte/.cs/.html), fxmanifest.lua, *.cfg files, package.json and known dropper file names.
 
 Usage:
   python audit.py <resource_or_resources_dir> [--min low|medium|high|critical] [--json]
@@ -22,10 +22,18 @@ from pathlib import Path
 
 SEV = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 SKIP_DIRS = {"node_modules", ".git", "dist", "build", ".next", "stream"}
-CODE_EXT = {".lua", ".js", ".ts", ".cs", ".tsx", ".jsx", ".mjs", ".cjs", ".vue", ".svelte"}
+CODE_EXT = {".lua", ".js", ".ts", ".cs", ".tsx", ".jsx", ".mjs", ".cjs", ".vue", ".svelte", ".html", ".htm"}
 CFG_EXT = {".cfg"}
-# File names dropped by known backdoor families (Blum/Cipher, 2026). Legit tooling uses babel.config.js etc.
-DROPPER_NAMES = {"yarn_builder.js", "webpack_builder.js", "babel_config.js"}
+# Loader code that turns an innocent-looking file name into a confirmed dropper.
+STRICT_LOADER = re.compile(r"eval\s*\(|new\s+Function\s*\(|runInThisContext|String\.fromCharCode\s*\([^)]*\^", re.I)
+# ImJer IOC set 2026.08.07 'dropper_filenames' (distinctive). Reported alone as medium, critical with loader code.
+DROPPER_NAMES = {"babel_config.js", "babel_preset.js", "build_cache.js", "cache_old.js", "env_backup.js", "eslint_rc.js",
+                 "hook_system.js", "jest_mock.js", "jest_setup.js", "mock_data.js", "patch_update.js", "sync_worker.js",
+                 "vite_temp.js", "vite_plugin.js", "webpack_bundle.js", "webpack_chunk.js", "runtime_module.js",
+                 "stable_core.js", "latest_utils.js", "utils_lib.js", "v1_config.js", "v2_settings.js", "beta_module.js",
+                 "session_store.js", "queue_handler.js"}
+# Legit stock files of the Cfx `yarn` / `webpack` system resources (~3 KB); Blum modifies them (43 KB / 632 KB).
+STOCK_BUILDERS = {"yarn_builder.js": "yarn", "webpack_builder.js": "webpack"}
 
 
 @dataclass
@@ -131,6 +139,54 @@ LINE_RULES = [
      "DrawMarker every frame: gate by distance, or use ox_lib points/zones / ox_target."),
     ("get-closest-loop", "low", "client", r"GetGamePool\s*\(\s*['\"]CPed",
      "Iterating the whole ped pool: cache and throttle, or use lib.getClosest* helpers."),
+    # --- IOC / evasion / secrets (ImJer IOC set 2026.08.07 and community audits) -------------------
+    ("blum-xor-dropper", "critical", "any",
+     r"String\.fromCharCode\s*\(\s*[A-Za-z0-9_$]+\s*\[\s*[A-Za-z0-9_$]+\s*\]\s*\^\s*[A-Za-z0-9_$]+\s*\)",
+     "Key-independent Blum/Warden XOR dropper decoder (String.fromCharCode(a[i]^k)). Treat the resource as compromised."),
+    ("known-backdoor-ext", "critical", "any",
+     r"blum-panel\.com|0xchitado\.com|2312321321321213\.com|5mscripts\.net|bhlool\.com|bybonvieux\.com|fivemgtax\.com|flowleakz\.org"
+     r"|iwantaticket\.org|l00x\.org|monloox\.com|noanimeisgay\.com|ryenz\.net|spacedev\.fr|trezz\.org|z1lly\.org|2nit32\.com"
+     r"|useer\.it\.com|wsichkidolu\.com|gfxpanel\.org|ciphercheats\.com|keyx\.club|dark-utilities\.xyz"
+     r"|185\.87\.23\.198|185\.80\.128\.3[56]|185\.80\.130\.168"
+     r"|VB8mdVjrzd|\bmiausas\b|\binstalled_notices\b|txadmin:js_create|\bRESOURCE_EXCLUDE\b|\bisExcludedResource\b|\bonServerResourceFail\b"
+     r"|UARZT6\[|\\u15E1|contact us to fix problems|bc1q2wd7y6cp5dukcj3krs8rgpysa9ere0rdre7hhj|LSxKJm6SpdExCACUcFTUADcvZgea65AaWo",
+     "Matches a Blum/Warden/Cipher/GFX IOC (ImJer IOC set 2026.08.07): C2 domain/IP, operator string, txAdmin-cloak marker or obfuscator residue."),
+    ("node-vm-run", "critical", "server", r"\.runIn(This|New)Context\s*\(|\bnew\s+vm\.Script\s*\(",
+     "Node vm code execution (Blum loaders use require('vm').runInThisContext). No legitimate use in a resource."),
+    ("invoke-native-sensitive", "critical", "any",
+     r"(?i)InvokeNative\s*\(\s*(0x561C060B|0x8E8CC653|0x6B171E87|0xA09E7E7B|`(EXECUTE_COMMAND|PERFORM_HTTP_REQUEST_INTERNAL(_EX)?|SAVE_RESOURCE_FILE)`)",
+     "ExecuteCommand / PerformHttpRequestInternal / SaveResourceFile called by native hash: evasion of name-based scanners."),
+    ("hardcoded-discord-token", "critical", "any", r"\b[MN][A-Za-z\d]{23,25}\.[\w-]{6}\.[\w-]{27,}\b",
+     "Looks like a Discord bot token in source: rotate it and load it from a `set` convar."),
+    ("txadmin-token-access", "high", "any", r"X-TxAdmin-(Token|Identifiers)",
+     "Resource code touching txAdmin auth headers: session-hijack indicator (only txAdmin's own monitor resource should)."),
+    ("env-index-evasion", "high", "any",
+     r"\b(_G|_ENV)\s*\[\s*['\"](PerformHttpRequest|load|loadstring|ExecuteCommand|assert|os|io|debug|GetConvar|SaveResourceFile)['\"]\s*\]",
+     "Dangerous global reached through _G/_ENV string indexing: classic string-match evasion in backdoors."),
+    ("telegram-exfil", "high", "server", r"api\.telegram\.org/bot",
+     "Telegram Bot API endpoint in server code: known exfiltration channel; verify purpose."),
+    ("http-raw-ip", "high", "any",
+     r"(PerformHttpRequest|fetch|axios\.\w+|https?\.(get|request))\s*\(\s*['\"`]https?://(?!127\.|localhost)\d{1,3}(\.\d{1,3}){3}",
+     "HTTP request to a raw IP address: typical C2 evasion; legitimate APIs use domain names."),
+    ("io-open-write", "high", "server", r"\bio\.open\s*\([^)]*,\s*['\"][wa]",
+     "Lua io.open in write/append mode: filesystem write outside the resource API."),
+    ("hardcoded-license-key", "high", "any", r"\bcfxk_[A-Za-z0-9]{10,}",
+     "Cfx.re server license key in a resource file: keep sv_licenseKey in a server-only cfg; regenerate it if published."),
+    ("client-sends-own-id", "high", "client",
+     r"TriggerServerEvent\s*\([^)]*GetPlayerServerId\s*\(\s*(PlayerId\s*\(\s*\)|cache\.playerId)\s*\)",
+     "Client sends its own server id: the server must use `source`, never a client-supplied id."),
+    ("debug-lib-tamper", "medium", "any",
+     r"\bdebug\.(sethook|setupvalue|getupvalue|setlocal|getregistry|setmetatable|upvaluejoin)\s*\(",
+     "Lua debug-library manipulation in a resource: anti-analysis / runtime tampering indicator."),
+    ("resource-enumeration", "medium", "server", r"\bGetResourceByFindIndex\s*\(",
+     "Enumerates every resource: rare in legit code, used by self-replicating backdoors to pick injection targets."),
+    ("http-handler-public", "medium", "server", r"\bSetHttpHandler\s*\(",
+     "SetHttpHandler is public on :30120/<resource>/: require a token (set convar), path whitelist, body cap and rate limit."),
+    ("statebag-handler-no-replicated", "medium", "server",
+     r"AddStateBagChangeHandler\s*\([^,]+,[^,]+,\s*function\s*\(\s*[\w.]*(\s*,\s*[\w.]+){0,3}\s*\)",
+     "Server state bag handler declares < 5 params, so it ignores `replicated`: client-written values may be acted on."),
+    ("lzstring-utf16", "medium", "any", r"\bdecompressFromUTF16\s*\(",
+     "LZString.decompressFromUTF16: legit in some bundles but a Blum JScrambler dropper marker; read the surrounding code."),
 ]
 
 MANIFEST_RULES = [
@@ -138,6 +194,10 @@ MANIFEST_RULES = [
     ("manifest-old-fxversion", "medium", r"fx_version\s+['\"](adamant|bodacious)['\"]", "Old fx_version: use 'cerulean'."),
     ("manifest-node16", "medium", r"node_version\s+['\"]16['\"]", "node_version '16': Node 16 was removed from FXServer (2026); use '22' or omit."),
     ("manifest-mysql-async", "medium", r"@mysql-async|@ghmattimysql", "Deprecated DB wrapper in manifest: use '@oxmysql/lib/MySQL.lua'."),
+    ("manifest-hidden-injection", "critical", r"--\[\[[^\]]*\]\]\s{20,}['\"][^'\"]*\.js['\"]",
+     "Block-comment decoy + whitespace padding + hidden .js path: Blum fxmanifest concealment."),
+    ("manifest-dotfile-js", "high", r"(['\"])(?:[^'\"]*[\\/])?\.[^'\"\\/]+\.js\1",
+     "Manifest loads a hidden dot-file .js script."),
     ("manifest-no-game", "medium", r"\A(?![\s\S]*\bgames?\s*[\s{(]*['\"](gta5|rdr3|common)['\"])", "`game 'gta5'` missing."),
 ]
 
@@ -189,6 +249,21 @@ def scan_net_handlers(text: str, rel: str, out: list[Finding]):
         body = text[start:start + 2500]
         end = re.search(r"\n\S*end\)", body)
         body = body[: end.start()] if end else body
+        body = re.sub(r"--[^\n]*", "", body)          # ignore comments mentioning 'source'
+        if "source" not in body:
+            line = text.count("\n", 0, m.start()) + 1
+            out.append(Finding("medium", "net-event-no-source", rel, line,
+                               f"Net event '{m.group(1)}' never uses `source`: who is allowed to call it?",
+                               m.group(0)[:160]))
+    # split form: RegisterNetEvent('x') ... AddEventHandler('x', function(...) ... end)
+    registered = set(re.findall(r"RegisterNetEvent\s*\(\s*['\"]([^'\"]+)['\"]\s*\)", text))
+    for m in re.finditer(r"AddEventHandler\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*function\s*\(([^)]*)\)", text):
+        if m.group(1) not in registered:
+            continue
+        body = text[m.end(): m.end() + 2500]
+        end = re.search(r"\n\S*end\)", body)
+        body = body[: end.start()] if end else body
+        body = re.sub(r"--[^\n]*", "", body)
         if "source" not in body:
             line = text.count("\n", 0, m.start()) + 1
             out.append(Finding("medium", "net-event-no-source", rel, line,
@@ -206,6 +281,11 @@ CFG_RULES = [
      "sv_stateBagStrictMode disabled: clients can write replicated state bags."),
     ("cfg-scripthook-allowed", "medium", r"^\s*set[rs]?\s+sv_scriptHookAllowed\s+['\"]?(true|1)\b",
      "sv_scriptHookAllowed enabled: clients may load ScriptHookV mods (cheat vector)."),
+    ("cfg-nonexistent-devtools", "low", r"^\s*set[rs]?\s+sv_enableDevtools\b",
+     "sv_enableDevtools does not exist (citizenfx/fivem#2667): no effect. Dev tools are gated by sv_devMode on Enhanced."),
+    # FiveM splits commands on ';' outside double quotes (Console.cpp); '#' starts a comment, ';' does not.
+    ("cfg-unquoted-semicolon", "medium", r'^(?:[^"#\n]|"[^"\n]*")*;',
+     "Unquoted ';' in a cfg line: FiveM splits commands on it (it is not a comment). Quote the value or move it to its own line."),
 ]
 
 
@@ -224,10 +304,47 @@ def scan_cfg(root: Path, out: list[Finding]):
 
 
 def scan_dropper_names(root: Path, out: list[Finding]):
-    for f in root.rglob("*"):
-        if f.is_file() and f.name.lower() in DROPPER_NAMES and not (set(f.parts) & SKIP_DIRS):
-            out.append(Finding("critical", "known-backdoor", str(f.relative_to(root)), 1,
-                               "File name matches a known backdoor dropper (Blum/Cipher family).", f.name))
+    """Dropper file names: medium on name alone, critical with loader code; stock yarn/webpack builders are fine."""
+    for f in root.rglob("*.js"):
+        if not f.is_file() or (set(f.parts) & SKIP_DIRS):
+            continue
+        name = f.name.lower()
+        if name not in DROPPER_NAMES and name not in STOCK_BUILDERS:
+            continue
+        rel = str(f.relative_to(root))
+        loader = bool(STRICT_LOADER.search(f.read_text(encoding="utf-8", errors="replace")))
+        if name in STOCK_BUILDERS:
+            if f.parent.name.lower() != STOCK_BUILDERS[name] or loader or f.stat().st_size > 20_000:
+                out.append(Finding("critical", "known-backdoor", rel, 1,
+                                   "Builder file modified or misplaced (Blum dropper target; stock file is ~3 KB, no eval/XOR).", f.name))
+        else:
+            out.append(Finding("critical" if loader else "medium", "known-backdoor" if loader else "dropper-filename", rel, 1,
+                               "File name used by Blum droppers" + (" and it contains loader code." if loader else ": read it."), f.name))
+
+
+def scan_package_json(root: Path, out: list[Finding]):
+    """npm install-time scripts and non-registry dependencies in NUI/server JS builds."""
+    for f in root.rglob("package.json"):
+        if set(f.parts) & SKIP_DIRS:
+            continue
+        try:
+            data = json.loads(f.read_text(encoding="utf-8", errors="replace"))
+        except ValueError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        rel = str(f.relative_to(root))
+        scripts = data.get("scripts") if isinstance(data.get("scripts"), dict) else {}
+        for hook in ("preinstall", "install", "postinstall", "prepare"):
+            if hook in scripts:
+                out.append(Finding("medium", "npm-install-script", rel, 1,
+                                   f"'{hook}' script runs at npm install: review it (recommend npm ci --ignore-scripts).", str(scripts[hook])[:160]))
+        for sect in ("dependencies", "devDependencies", "optionalDependencies"):
+            deps = data.get(sect) if isinstance(data.get(sect), dict) else {}
+            for dep, ver in deps.items():
+                if isinstance(ver, str) and re.match(r"(git\+|git:|https?:|github:|file:)", ver):
+                    out.append(Finding("medium", "npm-nonregistry-dep", rel, 1,
+                                       f"{dep} is installed from a non-registry source: unreviewed code.", f"{dep}: {ver}"[:160]))
 
 
 def audit(root: Path) -> list[Finding]:
@@ -246,6 +363,7 @@ def audit(root: Path) -> list[Finding]:
     scan_cfg(root, findings)
     if root.is_dir():
         scan_dropper_names(root, findings)
+        scan_package_json(root, findings)
     for f in iter_files(root):
         if f.name in ("fxmanifest.lua", "__resource.lua"):
             continue
@@ -266,7 +384,7 @@ def audit(root: Path) -> list[Finding]:
                     continue
                 if rx.search(code):
                     findings.append(Finding(sev, rid, rel, ln, msg, line.strip()[:160]))
-        if len(max(text.splitlines() or [""], key=len)) > 3000:
+        if f.suffix.lower() not in (".html", ".htm") and len(max(text.splitlines() or [""], key=len)) > 3000:
             findings.append(Finding("high", "minified-or-obfuscated", rel, 1,
                                     "Very long single line: minified/obfuscated code. Unreviewable in a resource.", ""))
         if f.suffix == ".lua":

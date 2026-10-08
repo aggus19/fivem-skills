@@ -68,11 +68,12 @@ dependencies {
 | Directive | Glob | Meaning / notes |
 |---|---|---|
 | `fx_version 'cerulean'` | — | Required. Selects behaviour level (§6). `adamant`/`bodacious` are older levels. |
-| `game 'gta5'` / `games { 'gta5', 'rdr3' }` / `'common'` | — | Required. `common` = no game-specific APIs. No key selects Legacy vs Enhanced (different server binary). |
+| `game 'gta5'` / `games { 'gta5', 'rdr3' }` / `'common'` | — | Required. `common` = no game-specific APIs. No key selects Legacy vs Enhanced (different server binary); dual-edition resources may declare `games { 'gta5', 'gta5enhanced' }` (gta5-enhanced.md section 10). The server **refuses to start** a resource with no recognised `fx_version` ("does not specify an `fx_version` in fxmanifest.lua") or one declaring both `game 'common'` and a specific game ("considered ill-formed"; `ServerResources.cpp`). |
 | `client_script(s)` | yes | Client files; extension picks runtime: `.lua`, `.js` (V8), `.net.dll` (C#). Auto-added to the client download. |
 | `server_script(s)` | yes | Server files: `.lua`, `.js` (Node 22), `.net.dll`. Never sent to clients. |
 | `shared_script(s)` | yes | Loaded on **both** sides, **before** client/server scripts; downloaded by clients (no secrets). |
 | `file(s)` | yes | Extra client-downloadable files: NUI assets, JSON, runtime-loaded Lua, `.meta` data files, `.mdb` debug symbols. |
+| `rdr3_warning '...'` | — | Required for `game 'rdr3'` resources; exact string: `'I acknowledge that this is a prerelease build of RedM, and I am aware my resources *will* become incompatible once RedM ships.'` (citizenfx `ext/system-resources/resources/chat/fxmanifest.lua`). |
 | `ui_page 'path'` or `ui_page 'https://...'` | — | Full-screen NUI page; must also be in `files` (unless absolute URL). Served from `https://cfx-nui-<res>/` under cerulean. One per resource. |
 | `ui_page_preload 'yes'` | — | Create the NUI frame immediately at resource start instead of the lazy/prepared frame (exact timing **UNVERIFIED**). |
 | `nui_callback_strict_mode 'true'` | — | Only accept NUI callback POSTs whose `Origin` is this resource's own frame (`https://cfx-nui-<res>` / `nui://<res>`); others are logged "blocked by NUI Callback Strict Mode". Recommended hardening. |

@@ -54,7 +54,7 @@ lib.callback.register('myres:server:action', function(source, targetId, payload)
 end)
 AddEventHandler('playerDropped', function() cooldown[source] = nil end)
 ```
-- **Atomicity:** money+item+DB changes either all happen or none: check capacity first (`CanCarryItem`), remove before add, use `MySQL.transaction`/`startTransaction` for multi-row writes, and guard re-entrancy with a per-player `busy[src]` flag across awaits.
+- **Atomicity:** money+item+DB changes either all happen or none: check capacity first (`CanCarryItem`), no yield between the check and the mutations (if one is unavoidable: take/verify first, grant after, refund on failure), use `MySQL.transaction`/`startTransaction` for multi-row writes, and guard re-entrancy with a per-player `busy[src]` flag across awaits.
 - **Proximity between players** (cuff, search, revive, give): server checks both peds exist, distance ≤ 3 m, same routing bucket (`GetPlayerRoutingBucket`), and target state (e.g. target is dead / cuffed).
 
 ## 2. Open-source reference implementations (2026 status)

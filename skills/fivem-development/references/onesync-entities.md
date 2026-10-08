@@ -156,7 +156,11 @@ AddEventHandler('entityCreating', function(entity)
     end
 end)
 ```
+**Gotcha (open reports, 2026-10):** `GetEntityModel(entity)` can return `0` for a valid entity inside `entityCreating` (ambient pickups, client-created peds/vehicles; creation data not yet synced to the server). Do not `CancelEvent()` solely because the model is `0`: apply the model blacklist only when `model ~= 0`, and recheck in `entityCreated` (or after a short wait) with cleanup if it fails. Reports: citizenfx/fivem#2924 (closed), #4053, #2944 (RedM) — no fix is documented, so treat as version-sensitive.
+
 Population type (`GetEntityPopulationType`, server) distinguishes ambient (1–5, random population) from mission/script (7 = `POPTYPE_MISSION`) entities — handy to skip ambient traffic in `entityCreating`.
+
+**Entity lifecycle checklist:** (1) decide who creates and who may delete each entity; (2) persist stable ids (DB id, plate, netId), never client handles across sessions; (3) handle spawn failure (model timeout, `DoesEntityExist` timeout) without leaving a half-created state; (4) handle owner drop / migration (`SetEntityOrphanMode`, `entityRemoved`); (5) make cleanup idempotent (safe to call twice); (6) on resource start, **reconcile** with existing world entities/DB state before respawning persistent objects so restarts don't duplicate them.
 
 ## 8. Entity lockdown, request-control filter, net game events
 **Entity lockdown** — who may create networked entities:
@@ -213,6 +217,8 @@ end)
 -- RemoveStateBagChangeHandler(cookie)
 ```
 - Bag names: `player:<serverId>`, `entity:<netId>`, `localEntity:<handle>`, `global`. Helpers (shared): `GetEntityFromStateBagName`, `GetPlayerFromStateBagName`, `GetStateBagValue`, `GetStateBagKeys`, `StateBagHasKey`, `SetStateBagValue`, `EnsureEntityStateBag`.
+- `Player(id)` always takes a **server ID** (`player:<id>` bag). On the client, `Player(PlayerId())` is a bug (`PlayerId()` is the local player index). Use `LocalPlayer.state` (internally `Player(-1)` → `GetPlayerServerId(PlayerId())`) or `Player(GetPlayerServerId(PlayerId()))`. Source: citizenfx/fivem `data/shared/citizen/scripting/lua/scheduler.lua` (`playerMT.__index`).
+- Keys are enumerable with `GetStateBagKeys('player:5')` (shared native); single values with `GetStateBagValue(bagName, key)`.
 - Defaults: server sets replicate; client sets don't, unless `state:set(k, v, true)`.
 - Shallow semantics: `Entity(x).state.a.b = 1` does **not** replicate; set the whole value or use flat keys (`state['a:b']`).
 - Policy: by default player bags are writable by that player and the server; entity bags by the owning client and the server; global only by the server.
@@ -220,7 +226,9 @@ end)
 - Change handlers cannot reject a change. Without strict mode, revert unauthorised writes on the server (`Entity(ent).state:set(key, oldValue, true)`) and never trust client-writable keys for money/permissions.
 - Rate limits: state bag writes from clients go through the `stateBag`, `stateBagFlood` and `stateBagSize` limiters (`set rateLimiter_stateBag_rate <n>` / `_burst`; defaults rate/burst 75/125, flood 150/175, size 131072/262144 bytes — same constants in Legacy source `StateBagPacketHandler.cpp` and the Enhanced docs table). Flooding gets the client dropped; the console names the convar to raise.
 - Size: keep values small (ids, numbers, short strings). Large tables in `GlobalState` are re-sent to every client on change.
-- Enhanced: handlers only fire when the entity exists; only values marked replicated are sent; sets ~10× faster.
+- Enhanced: handlers only fire when the entity exists; only values marked replicated are sent; sets ~10× faster; max 32 KB per value (gta5-enhanced.md 5b).
+- When a client writes to a bag the server doesn't know yet, only `entity:<netId>` bags are auto-created. Writes to unknown `player:`/`global` bags are silently dropped. Under the base `stateBag` limit, excess updates are dropped with at most one `sbag-update-dropped` warning per second per client (no kick). Source: `StateBagPacketHandler.cpp`.
+- Client side, resolving a netId the client doesn't hold (`NetworkGetEntityFromNetworkId`, `GetEntityFromStateBagName` in a change handler for a far-away entity) prints `GetNetworkObject: no object by ID <n>` each time. Guard with `NetworkDoesEntityExistWithNetworkId(netId)` (parse `entity:(%d+)` from the bag name) to avoid console spam.
 
 ## 10. Routing buckets (instances)
 Server natives (all verified):
@@ -293,6 +301,7 @@ end)
 - https://docs.fivem.net/docs/server-manual/server-commands/ (same repo, `server-manual/server-commands.md`)
 - https://docs.fivem.net/docs/scripting-manual/networking/state-bags/ · https://docs.fivem.net/docs/scripting-manual/networking/ids/
 - https://docs.fivem.net/docs/developers/legacy-vs-enhanced/
+- https://github.com/citizenfx/fivem/issues/2924 · /issues/4053 · /issues/2944 (`GetEntityModel` returning 0 in `entityCreating`, checked via GitHub API 2026-10-08)
 - https://docs.fivem.net/docs/scripting-reference/events/server-events/ and event pages `onEntityBucketChange`, `onPlayerBucketChange`, `populationPedCreating`
 - Natives: https://docs.fivem.net/natives/?_0x489E9162 (SET_ENTITY_ORPHAN_MODE), ?_0xA0F2201F (SET_ROUTING_BUCKET_ENTITY_LOCKDOWN_MODE), ?_0x5BA35AAF (ADD_STATE_BAG_CHANGE_HANDLER), ?_0x9F7F8D36 (SET_ENTITY_IGNORE_REQUEST_CONTROL_FILTER), ?_0x8A2FBAD4 (SET_PLAYER_CULLING_RADIUS)
 - Forum: https://forum.cfx.re/t/5415045 (Dev Update #3: tick rate, state bags), https://forum.cfx.re/t/5391635 (Dev Update #1: sync-mode consolidation)

@@ -74,6 +74,7 @@ local rotated = q * vec3(1, 0, 0)
 ```
 Global helpers (docs: Lua functions): `norm(v|q)`, `dot(a, b)`, `cross(a, b)` (vec3×vec3 → vec3; vec2×vec2 → number; quat variants), `inv(q)`, `slerp(a, b, t)`. Matrices: `mat3`, `mat4`, `mat(...)` (column-major, mutable). Full GLM binding: `local glm = require 'glm'` (built-in module; `glm.rotate`, `glm.perspective`, `glm.ray.intersectAABB`, ...).
 - Fields: `x y z w`, `r g b a`, `1 2 3 4`; quats also `angle`, `axis`. Assigning `v.x = 1` errors — build a new vector.
+- `GetEntityCoords` and other `Vector3`-returning natives return **one** `vector3`, not three numbers: `local x, y, z = GetEntityCoords(ped)` gives `y = z = nil`. Use `local x, y, z in GetEntityCoords(ped)` or `.x/.y/.z`. Only pointer out-params (e.g. `GetGroundZFor_3dCoord` returns `found, z`) come back as extra return values.
 - Natives accept vectors where they take `x, y, z` (auto-unpack) **unless** the resource uses `use_experimental_fxv2_oal`.
 - Precision: float32 → don't use vectors to store money/IDs; `vec3(0.1, 0, 0).x ~= 0.1`.
 
@@ -88,7 +89,7 @@ Global helpers (docs: Lua functions): `norm(v|q)`, `dot(a, b)`, `cross(a, b)` (v
 | `msgpack`, `json` | yes | yes | lua-cmsgpack / lua-rapidjson (see §8). |
 | `Citizen`, `promise`, `exports`, `GlobalState`, `LocalPlayer` (client), `Entity()`, `Player()` | yes | yes | From `scheduler.lua` / `deferred.lua`. |
 
-Client wall-clock: `GetCloudTimeAsInt()` (UTC seconds) or `GetLocalTime`; server: `os.time()`. Timers both sides: `GetGameTimer()` (ms).
+Client wall-clock: `GetCloudTimeAsInt()` (UTC seconds) or `GetLocalTime`; server: `os.time()`. Timers both sides: `GetGameTimer()` (ms, monotonic). **Client Lua has no `io` or `os`** (`os.time`, `os.date`, `os.clock` are `nil` client-side), so shared code must not call `os.*` (source: `LuaScriptRuntime.cpp`, `lualibs` under `#ifdef IS_FXSERVER`).
 
 ## 5. Scheduler: threads, Wait, promises
 | Function | Meaning |
@@ -99,7 +100,8 @@ Client wall-clock: `GetCloudTimeAsInt()` (UTC seconds) or `GetLocalTime`; server
 | `SetTimeout(ms, fn)` → id, `ClearTimeout(id)` | One-shot timer. |
 | `promise.new()`, `p:resolve(v)`, `p:reject(e)`, `p:next(ok, err)`, `promise.all(list)`, `promise.first(list)`, `promise.map(list, fn)` | Deferred lib (global `promise`). |
 | `Citizen.Await(p)` | Yield until `p` settles; rethrows on reject. Must be inside a coroutine. |
-| `PerformHttpRequestAwait(url, method?, data?, headers?, options?)` | Server, build ≥ 9515. |
+| `PerformHttpRequest(url, cb, method?, data?, headers?, options?)` | Server. Defaults `'GET'`, `''`, `{}`; `options.followLocation` defaults to `true`. `cb(status, body, headers, errorData)`; if the request cannot be dispatched, `cb(0, nil, {}, 'Failure handling HTTP request')`. Source: `data/shared/citizen/scripting/lua/scheduler.lua` |
+| `PerformHttpRequestAwait(url, method?, data?, headers?, options?)` | Server, build ≥ 9515. Returns the same four values as the callback. |
 | `Citizen.Trace(str)`, `print(...)` | Console output. |
 
 Rules:
@@ -141,13 +143,15 @@ Internals (scheduler.lua / main.js): `exports(name, fn)` registers handler for l
 - Errors: "No such export X in resource Y" if the resource is stopped/not started yet or the name is wrong. Guard with `GetResourceState('myres') == 'started'` or `dependency 'myres'`.
 - The cache lives in the consumer and is cleared when the provider stops (`onClientResourceStop`/`onServerResourceStop`, Lua and JS), so refs refresh after a restart. Errors inside an export are rethrown in the caller as "An error occurred while calling export ...".
 - Inside an export, `GetInvokingResource()` returns the caller's name: use it to allow-list callers of privileged exports.
-- JS alias: `exports.txAdmin` resolves to `monitor`.
+- `exports.txAdmin` is remapped to the `monitor` resource in **both** Lua (`scheduler.lua`) and JS (`main.js`).
 
 ## 8. Serialization: msgpack and json
 - Events, exports, state bags and function refs use **MessagePack**. Lua config set by `scheduler.lua`: integers packed `unsigned` where possible, arrays `without_hole` (a sparse array becomes a map with integer keys), empty table → empty **array**.
-- Lua vectors/quats are msgpack **extension types** — they survive Lua ↔ Lua (and C#) events. JS has no unpacker for them: send `{ x, y, z }` tables across Lua ↔ JS. (**UNVERIFIED**: exact JS-side shape of a received Lua vector.)
+- Lua vectors/quats are msgpack **extension types 20/21/22/23** (vector2/3/4/quat). They survive Lua ↔ Lua (and C#) events and exports. The JS runtime registers no unpacker for them (only funcref 10/11), so a JS handler receives a raw msgpack ext object, not an array. Send `{ x, y, z }` tables across Lua ↔ JS. Sources: https://github.com/citizenfx/lua-cmsgpack/blob/grit/src/lua_cmsgpack.h · https://github.com/citizenfx/fivem/blob/master/data/shared/citizen/scripting/v8/main.js
+- **Max table nesting 16.** Lua payloads are packed by citizenfx/lua-cmsgpack with `MP_MAX_NESTING 16`. Without `LUA_MSGPACK_ERROR_NESTING`, a table nested 16+ levels deep is **silently sent as `nil`**, with no error. Flatten deep structures (`lua_pack_any` in the same header).
 - Functions are sent as function references (callable across resources); entity/Player objects in JS have their own ext (41/42).
 - `json` = lua-rapidjson: `json.encode(value[, opts])`, `json.decode(str)`, `json.null`. Defaults set by runtime: `empty_table_as_array = true` (`{}` → `[]`), `with_hole = true` (sparse arrays get `null`). Pretty print: `json.encode(t, { indent = true })` (option name present in source; formatting details **UNVERIFIED**).
+- Vectors/quats encode natively: `json.encode(vector3(1,2,3))` gives `{"x":1.0,"y":2.0,"z":3.0}`; with `json.encode(v, { vectorarray = true })` gives `[1.0,2.0,3.0]`. `json.decode` returns plain tables; rebuild with `vec3(t.x, t.y, t.z)`. Source: https://github.com/citizenfx/lua-rapidjson/blob/grit/src/lua_rapidjson.hpp (`JSON_ENCODER_ARRAY_VECTOR`).
 - NaN/inf are not valid JSON; integer-valued floats may round-trip as integers.
 
 ## 9. Lua idioms and pitfalls
@@ -197,6 +201,8 @@ on('onResourceStop', (res: string) => { if (res === GetCurrentResourceName()) cl
 - Node thread affinity (server): callbacks from Node APIs (fs, sockets, timers of npm libs) run on the libuv thread; call natives only after `setImmediate(() => ...)`.
 - `child_process`/`worker_threads` need `add_unsafe_child_process_permission` / `add_unsafe_worker_permission` in `server.cfg`.
 - Natives use numbers/strings; vectors come back as `[x, y, z]` arrays; hashes via `GetHashKey`.
+- JS `source` is reset to `null` at the end of **every** event dispatch (Lua restores the previous value). A synchronous `emit()` inside a handler therefore nulls the outer `source`: make `const src = source;` the first line (`main.js`, setEventFunction).
+- JS timers are tick-driven: `setTimeout`/`setInterval` clamp to >= 1 ms; `setImmediate` is `setTimeout(fn, 0)` (not a microtask); `requestAnimationFrame` callbacks queued in one tick run in reverse order (`v8/timer.js`).
 - Typings: `@citizenfx/client` / `@citizenfx/server` **2.0.35805-1** (declare `source`, `exports: CitizenExports`, natives). Extend export typings with `declare global { interface CitizenExports { myres: { getStock(id: string): number } } }`.
 - Wrappers: `@nativewrappers/fivem` / `@nativewrappers/server` 0.0.174 (`@nativewrappers/client` deprecated). ox_lib for JS: `@overextended/ox_lib` 3.40.0 (`/client`, `/server`, `/shared`).
 - Bundling recipes (esbuild 0.28, rolldown 1.2, tsup 8.5): `tooling.md` §5.

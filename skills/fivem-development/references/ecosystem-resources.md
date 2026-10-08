@@ -62,6 +62,9 @@ local img = exports.fmsdk:takeServerImage(src, { metadata = { reason = 'report' 
 -- client: exports.fmsdk:takeImage(opts?) ; also uploadImage, requestPresignedUrl
 ```
 Old `LogMessage` logs to the `default` dataset. Alternative: ox_lib `lib.logger` (Fivemanage/Datadog/Grafana Loki via convars).
+- `metadata.playerSource` / `metadata.targetSource` make the SDK append that player's identifiers (when `appendPlayerIdentifiers` is true; drop types via `excludedPlayerIdentifiers`). Keep `message` static and put every dynamic value in metadata (filterable in the dashboard). Logs are queued and batched by the SDK — never batch yourself.
+- `config.json` (v3.2.0) defaults: `level "info"`, `levels ["error","warn","info","debug"]` (no `fatal`: a `Log(ds, 'fatal', ...)` is rejected unless you add it), `console true`, `enableCloudLogging true`, `excludedPlayerIdentifiers ["ip"]`, `excludeInDepthMetadata false`; built-in auto-loggers are objects, all **off** by default: `playerEvents`, `chatEvents`, `baseEvents`, `txAdminEvents`, `oxInventoryEvents` = `{ "enabled": false, "dataset": "default" }`.
+- Sources: https://github.com/fivemanage/sdk/blob/main/config.json · https://docs.fivemanage.com/fivemanage/guides/logs/best-practices
 
 ## 5. Appearance / clothing
 | Resource | Status | Notes |

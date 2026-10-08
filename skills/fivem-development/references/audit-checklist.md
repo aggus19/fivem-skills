@@ -45,6 +45,8 @@ Code red flags (any one = treat as compromised until proven otherwise):
 - `ExecuteCommand` with remote input; `add_ace`/`add_principal` from code.
 - Outbound HTTP to unknown domains; webhooks receiving `sv_licenseKey`, `rcon_password`, `mysql_connection_string`, txAdmin tokens or player identifiers.
 - `GlobalState` keys with odd names used as "already infected" markers.
+- **NUI/server JS build chain:** a committed minified bundle without its source is NOT REVIEWABLE (report like escrow). Check `package.json` for `preinstall`/`install`/`postinstall`/`prepare` scripts and git/http/file dependencies (`audit.py` rules `npm-install-script`, `npm-nonregistry-dep`); require a committed lockfile; recommend `npm ci --ignore-scripts && npm run build`. Committed `node_modules` in a server-JS resource is unreviewed code with full server privileges.
+- Purpose/capability mismatch is the highest-signal manual check: a HUD that reads `mysql_connection_string`, a UI resource with `PerformHttpRequest`, a single-purpose script calling `GetResourceByFindIndex`.
 
 ## 3. Known backdoor families: indicators
 Community-sourced (Cfx forum advisory 2026-07-21 + an independent analysis repo); attribution between families is a single researcher's claim. New variants change names — patterns in §2 matter more than exact strings.
@@ -52,9 +54,18 @@ Community-sourced (Cfx forum advisory 2026-07-21 + an independent analysis repo)
 | Indicator type | Values |
 |---|---|
 | Panel / brand strings | `cipher-panel`, `ciphercorp`, `blum-panel`, `warden-panel`, `gfxpanel` |
+| C2 domains, ImJer IOC set 2026-08 (more) | `blum-panel.com`, `0xchitado.com`, `2312321321321213.com`, `5mscripts.net`, `bhlool.com`, `bybonvieux.com`, `fivemgtax.com`, `flowleakz.org`, `iwantaticket.org`, `l00x.org`, `monloox.com`, `noanimeisgay.com`, `ryenz.net`, `spacedev.fr`, `trezz.org`, `z1lly.org`, `2nit32.com`, `useer.it.com`, `wsichkidolu.com`, `ciphercheats.com`, `keyx.club`, `dark-utilities.xyz` |
+| C2 IPs | `185.87.23.198` (origin, Socket.IO :5000), `185.80.128.35`, `185.80.128.36`, `185.80.130.168` (GFX :3000) |
 | C2 domains (block at egress) | `blum-panel.me`, `warden-panel.me`, `9ns1.com`, `fivems.lt`, `jking.lt`, `gfxpanel.org`, `kutingplays.com`, `2ns3.net`, `giithub.net` (+ ~20 fallbacks in the analysis repo's `iocs/domains.txt`) |
 | Infection markers | `GlobalState.miauss` / thread name `miaus`/`miauss` (dropper), `GlobalState.ggWP` (replicator), strings `bertjj`, URL paths ending `JJ` |
-| Dropper file names | `yarn_builder.js`, `webpack_builder.js`, `babel_config.js` (note: underscore, not `babel.config.js`) |
+| Operator strings | `VB8mdVjrzd` (Discord invite), handles `bertjj`/`bertjjgg`/`miauss`/`miausas`, JJ keys (`devJJ`, `nullJJ`, `zXeAHJJ`...), `installed_notices`, `vm').runInThisContext`, `txadmin:js_create`, `X-TxAdmin-Token`/`X-TxAdmin-Identifiers`, dropper comment `// if you found this contact us to fix problems`, BTC `bc1q2wd7y6cp5dukcj3krs8rgpysa9ere0rdre7hhj`, LTC `LSxKJm6SpdExCACUcFTUADcvZgea65AaWo` |
+| XOR dropper | `String.fromCharCode(a[i]^k)`: the key is random per file (66...252), so match the structure, not a key (rule `blum-xor-dropper`) |
+| Dropper file names | distinctive (report on name, confirm by content): `babel_config.js` (underscore, not `babel.config.js`), `babel_preset.js`, `build_cache.js`, `cache_old.js`, `env_backup.js`, `eslint_rc.js`, `hook_system.js`, `jest_mock.js`, `jest_setup.js`, `mock_data.js`, `patch_update.js`, `sync_worker.js`, `vite_temp.js`, `webpack_bundle.js` ...; common names (`main.js`, `index.js`, `sync.js`, `core.js` ...) only with loader code (`eval(`, `new Function(`, `runInThisContext`, XOR decoder). Placement varies (any dir, resource root). **`yarn_builder.js`/`webpack_builder.js` are legitimate stock files of the `yarn`/`webpack` system resources (~3 KB); flag them only when modified/large (infected copies 43 KB / 632 KB) or outside those resources.** |
+| Manifest concealment | `--[[server.lua]]` decoy + 20 or more spaces + hidden `.js` path on the same line; dot-file scripts (`'.x.js'`, `'node_modules/.cache.js'`) |
+| Cloaked resources | Blum names its own resources from its `RESOURCE_EXCLUDE` list (e.g. `acct`, `core`, `data`, `sync`, `util` ...) so txAdmin hides them; a name match alone is not proof |
+| txAdmin map | `cl_playerlist.lua` -> `helpEmptyCode` (client RCE, appended), `sv_resources.lua` -> `onServerResourceFail` (server RCE), `sv_main.lua` -> `RESOURCE_EXCLUDE`/`isExcludedResource` (inline cloak, **not hand-cleanable: reinstall txAdmin of the same version**) |
+| Size fingerprints | JS 420-470 KB (JScrambler loader), 1.60-1.65 MB (replicator), 40-46 KB (XOR builder dropper); Luraph Lua 60-67 KB (manual check; not an audit.py rule) |
+| Evasion | natives by hash (`Citizen.InvokeNative(0x561C060B...)` = ExecuteCommand), `_G['load']`/`_ENV['PerformHttpRequest']`, `debug.sethook`, `io.open(...,'w')` |
 | txAdmin tampering | modified `monitor/resource/sv_main.lua`, `sv_resources.lua`, `cl_playerlist.lua`; strings `helpEmptyCode`, `onServerResourceFail`, `RESOURCE_EXCLUDE`, `isExcludedResource` |
 | Rogue txAdmin admin | account `JohnsUrUncle` in `txData/admins.json` |
 | Persistence | extra `server_scripts` lines in many `fxmanifest.lua`; `server.cfg` line injected at a random position; on Windows: scheduled tasks, services, Run keys, Defender exclusions |
@@ -94,11 +105,15 @@ For each `RegisterNetEvent`, `lib.callback.register`, framework callback, NUI→
 2. Permission/job/ownership check on the server?
 3. Distance/location check when physical?
 4. Argument types/ranges/whitelists; prices from server config; NaN/inf rejected?
-5. Rate limit / busy lock; remove-before-add; DB transaction for multi-step changes?
+5. Rate limit / busy lock; no yield between check and mutations (else take/verify first, refund on failure); DB transaction for multi-step changes?
 6. Parametrised SQL only (Lua and JS template literals)?
 7. Sensitive server exports check `GetInvokingResource()`?
 8. Client-written state bags never trusted; works with `sv_stateBagStrictMode true`?
 9. Entities spawned server-side; works with `sv_entityLockdown strict`?
+10. **Amplification:** for every client-callable endpoint (net event, `lib.callback.register`/framework callback, NUI→server chain, vRP `Tunnel.bindInterface` function) assume a cheat calls it in a tight loop. Flag: DB query per call (serve reads from a server cache), fan-out `TriggerClientEvent(-1, ...)` or `GlobalState` writes from a client-triggered path, full cache reload/rebuild per call, oversized replies (lists with LONGTEXT/base64; return metadata, fetch details on demand in one batch), and client loops that call the server once per list item (N+1).
+11. Admin/staff endpoints need a real permission (`IsPlayerAceAllowed`, framework group/job) — a cooldown/"CanUse" helper that only checks time is **not** authorization.
+12. String inputs have length caps before any DB write (unbounded strings into LONGTEXT = storage DoS); ownership enforced in SQL (`WHERE id = ? AND owner = ?`).
+13. Evidence discipline: list every file from `fxmanifest.lua` in "Files reviewed"; re-read each cited `file:line`; name the exact handler; summary counts must equal the findings rows.
 
 Severity guide: arbitrary money/items/admin/RCE → **critical**; exploitable dupes, teleports, kill/strip other players → **high**; info leaks, spam, missing rate limits → **medium**; hygiene → **low**.
 
@@ -121,11 +136,13 @@ Fixes: `performance.md`.
 ## 9. `audit.py` rule reference
 | Area | Rule ids (severity) |
 |---|---|
-| Backdoor / RCE | `known-backdoor` (C), `rce-load-http` (C), `rce-assert-load` (C), `os-exec` (C), `node-child-process` (C), `write-manifest` (C), `rce-load` (H), `obfuscation-hex` (H), `obfuscation-bytes` (H), `js-charcode-decoder` (H), `minified-or-obfuscated` (H), `execute-command` (H), `ace-from-code` (H), `js-raw-network` (M), `http-exfil` (M), `save-other-resource` (M), `convar-secret` (M) |
+| Backdoor / RCE | `known-backdoor` (C), `known-backdoor-ext` (C), `blum-xor-dropper` (C), `node-vm-run` (C), `invoke-native-sensitive` (C), `hardcoded-discord-token` (C), `rce-load-http` (C), `rce-assert-load` (C), `os-exec` (C), `node-child-process` (C), `write-manifest` (C), `rce-load` (H), `obfuscation-hex` (H), `obfuscation-bytes` (H), `js-charcode-decoder` (H), `minified-or-obfuscated` (H), `execute-command` (H), `ace-from-code` (H), `env-index-evasion` (H), `txadmin-token-access` (H), `telegram-exfil` (H), `http-raw-ip` (H), `io-open-write` (H), `hardcoded-license-key` (H), `js-raw-network` (M), `http-exfil` (M), `save-other-resource` (M), `convar-secret` (M), `debug-lib-tamper` (M), `resource-enumeration` (M), `lzstring-utf16` (M), `dropper-filename` (M) |
 | SQL | `sql-concat` (C), `sql-format` (C), `sql-template-literal` (C), `sql-mysql-async` (M) |
-| Trust boundary | `client-money-event` (H), `client-trusted-price` (H), `webhook-exposed` (H), `server-event-giveitem` (M), `client-setcoords-from-net` (M), `client-replicated-statebag` (M), `nui-unsafe-html` (M), `nui-to-server-direct` (M), `net-event-no-source` (M), `deprecated-register-server-event` (L) |
-| server.cfg | `cfg-public-secret` (H), `cfg-lockdown-inactive` (M), `cfg-scripthook-allowed` (M), `cfg-statebag-not-strict` (L) |
-| Legacy / perf | `loop-without-wait` (H), `manifest-*`, `esx-getsharedobject-event` (M), `wait-zero-loop` (M), low-severity hygiene rules |
+| Trust boundary | `client-money-event` (H), `client-trusted-price` (H), `client-sends-own-id` (H), `webhook-exposed` (H), `server-event-giveitem` (M), `client-setcoords-from-net` (M), `client-replicated-statebag` (M), `statebag-handler-no-replicated` (M), `http-handler-public` (M), `nui-unsafe-html` (M), `nui-to-server-direct` (M), `net-event-no-source` (M; inline and split `RegisterNetEvent('x')` + `AddEventHandler('x', function...)` forms), `deprecated-register-server-event` (L) |
+| Supply chain (package.json) | `npm-install-script` (M), `npm-nonregistry-dep` (M) |
+| server.cfg | `cfg-public-secret` (H), `cfg-lockdown-inactive` (M), `cfg-scripthook-allowed` (M), `cfg-unquoted-semicolon` (M; `;` outside double quotes splits the command), `cfg-statebag-not-strict` (L), `cfg-nonexistent-devtools` (L) |
+| Manifest | `manifest-hidden-injection` (C), `manifest-legacy` (H), `manifest-dotfile-js` (H), `manifest-old-fxversion` (M), `manifest-node16` (M), `manifest-mysql-async` (M), `manifest-no-game` (M) |
+| Legacy / perf | `loop-without-wait` (H), `esx-getsharedobject-event` (M), `wait-zero-loop` (M), `getplayerped-minus1` (L), `citizen-prefix` (L), `getplayers-loop-identifiers` (L), `qb-getcoreobject-in-loop` (L), `draw-marker-everywhere` (L), `get-closest-loop` (L) |
 Exit code 1 when any high/critical finding remains. `--json` for CI.
 
 ## 10. Report format

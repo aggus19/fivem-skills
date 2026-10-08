@@ -80,7 +80,7 @@ Defaults verified in `ServerGameState.cpp` / docs. Change only with measurements
 - Biggest script-controlled costs: broadcasts to `-1`, large GlobalState, frequently changing player state bags (replicated to everyone in scope), voice. Keep event payloads < a few KB; use latent events above that.
 - Join burst: every connecting client downloads all changed resources/streams from the server (or your file server/CDN if configured). Big streaming packs dominate join time **[community]**.
 - Ensure `net_tcpConnLimit` (default 16 per IP) suits proxies/load balancers **[docs]**.
-- DDoS/edge protection: a provider-level UDP filter is common on large servers; `sv_forceIndirectListing` / `sv_endpointPrivacy` hide addresses **[docs]**.
+- DDoS/edge protection: a provider-level UDP filter is common on large servers; `sv_forceIndirectListing` + `sv_listingHostOverride` keep the real address off the server list (`sv_endpointPrivacy` was removed 2026-07-08).
 
 ## 6. Hardware sizing
 Official minimum **[docs, fivem.net/server-hosting]**: "x86-64 system running Linux or Windows", "multi-core processor is preferred", "decent upstream connectivity". There is **no official sizing table**. Practical guidance:

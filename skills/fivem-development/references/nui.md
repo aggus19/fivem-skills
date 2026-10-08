@@ -91,7 +91,7 @@ const res = await fetch(`https://${GetParentResourceName()}/buy`, {
 | API | Notes |
 |---|---|
 | `RegisterNuiCallback(name, function(data, cb) end)` | Native-based (current docs). Lua wrapper catches errors and logs "error during NUI callback". |
-| `RegisterNUICallback(name, fn)` | Older event-based wrapper (`__cfx_nui:<name>` + `RegisterNuiCallbackType`); still works, same signature. |
+| `RegisterNUICallback(name, fn)` | Older event-based wrapper (`__cfx_nui:<name>` + `RegisterNuiCallbackType`); still works, same signature. Docs label it **Legacy API** (kept for backwards compatibility); use the `RegisterNuiCallback` native in new code. |
 | `RegisterRawNuiCallback(name, fn)` / `UnregisterRawNuiCallback(name)` | Raw HTTP-style request/response (custom status/headers); request/response table shape **UNVERIFIED** — check the native page before use. |
 | JS: `RegisterNuiCallback(name, (data, cb) => cb({...}))` | C#: `RegisterNuiCallback(name, new Action<IDictionary<string, object>, CallbackDelegate>(...))` |
 
@@ -106,6 +106,9 @@ const res = await fetch(`https://${GetParentResourceName()}/buy`, {
 | `IsNuiFocused()`, `IsNuiFocusKeepingInput()` | Query state. |
 | `SetNuiZindex(z)` | Order resource frames. |
 | `local x, y = GetNuiCursorPosition()` | Cursor position (pointer args become return values in Lua). |
+
+- `lib.setNuiFocus(allowInput, disableCursor)` is **not** `SetNuiFocus(hasFocus, hasCursor)`: it always focuses, the 2nd argument is inverted (`true` hides the cursor), and `allowInput` sets `SetNuiFocusKeepInput`. Pair it with `lib.resetNuiFocus()` (ox_lib `resource/interface/client/main.lua`).
+- Make stuck focus impossible: route every focus change through one function. In React, wrap the app in an error boundary whose `componentDidCatch` calls `fetchNui('close')`. Optionally have the UI `ping` a NUI callback every few seconds while open, and let Lua release focus if no ping arrives for ~10 s. Emergency recovery: `SetNuiFocus(false, false)`.
 
 Always release focus on close, Escape, death/ragdoll (if relevant) and `onResourceStop`; a stuck `SetNuiFocus(true, true)` leaves the player unable to play. Escape handling: listen for `keydown` in the page and call your `close` callback.
 
@@ -142,6 +145,8 @@ For Vue/Svelte, `npm create vite@latest web -- --template vue-ts` (or `svelte-ts
 - **Menu/app** (focused): render nothing when hidden (`return null` / unmount), lazy-load heavy views, release focus on close.
 - Transparent `html, body` background; one root element; `user-select: none`; size with `vh`/`clamp()`; test 1080p, 1440p, 4K, ultrawide.
 - Measure with devtools Performance tab and `resmon` (NUI cost shows on the client as CEF/GPU time, not in the resource row).
+
+- Blurring the game behind a panel: CSS `backdrop-filter` can't see the game frame (the game isn't part of the CEF page; one report says it renders black in-game, **UNVERIFIED**). Cfx exposes the game back buffer to WebGL instead: bind a 2D texture and set `TEXTURE_WRAP_T` to `CLAMP_TO_EDGE`, then `MIRRORED_REPEAT`, then `REPEAT`; nui-core then binds the game render target. Draw it to a canvas at a low rate (<= 30 fps) and blur the canvas. Costly on Legacy's jitless CEF 103. Source: `code/components/nui-core/src/NUIInitialize.cpp` (`glTexParameterfHook`).
 
 ## 10. Loading screens
 - `loadscreen 'web/loading.html'` + `files`, optional `loadscreen_cursor 'yes'`, `loadscreen_manual_shutdown 'yes'` (then call `ShutdownLoadingScreenNui()` from a client script, e.g. after spawn).

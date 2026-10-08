@@ -55,6 +55,8 @@ Read once at start from convar `mysql_connection_string`; fallback env var `DB_C
 | URI | `mysql://user:pass@host:3306/database?charset=utf8mb4&connectionLimit=20` |
 | Key/value (semicolon) | `user=fivem;password=S3cret;host=127.0.0.1;port=3306;database=fivem;charset=utf8mb4` |
 
+The key/value form **must be quoted** in server.cfg: an unquoted `;` splits the line into separate console commands (see convars-and-commands.md section 1).
+
 Key/value aliases accepted (source `src/config.ts`): `host`/`hostname`/`ip`/`server`/`data source`/`address`/`addr` → host; `user`/`user id`/`username`/`uid` → user; `password`/`pwd`/`pass` → password; `database`/`db` → database.
 
 **Special characters**: the URI parser splits on `:` and `@` and does **not** URL-decode, so avoid `; , / ? : @ & = + $ #` in the password, or switch format (official docs advice). Easiest: generate an alphanumeric password.
@@ -145,6 +147,7 @@ CreateThread(function()
     local isUp = exports.oxmysql:isReady()   -- boolean; exports.oxmysql:awaitConnection() also exists
 end)
 ```
+Queries sent before the pool exists are not lost: `getConnection()` waits (`while (!pool) await sleep(0)`) until oxmysql has connected, so `MySQL.ready` is only needed to run one-time setup in order, not to make queries safe. `.await` still needs a coroutine. Source: https://github.com/overextended/oxmysql/blob/main/src/database/connection.ts
 
 ## 5. Method reference and result shapes
 
@@ -232,6 +235,7 @@ local ok3 = MySQL.transaction.await({
 }, { id = 2, name = 'John', newname = 'Jane' })
 ```
 - Returns `false` on any failure (rolls back, prints the failing statement, fires `oxmysql:transaction-error`); it does **not** raise.
+- **A conditional statement that matches 0 rows is not a failure.** `UPDATE accounts SET balance = balance - ? WHERE id = ? AND balance >= ?` with too little balance updates 0 rows, and the batch still **commits** the remaining statements (e.g. the credit). oxmysql rolls back only when a query throws (`src/database/rawTransaction.ts`). For "check then debit/credit" logic use `MySQL.startTransaction` and `return false` when `affectedRows ~= 1` (section 7.2, database-optimization.md section 8).
 - You cannot read intermediate results (e.g. an insertId) — use `LAST_INSERT_ID()` in the next statement or `startTransaction`.
 
 ### 7.2 `MySQL.startTransaction` (interactive, since 2.12.0; "experimental" label removed in 2.14.2)
@@ -293,6 +297,8 @@ if not ok then
     lib.print.error(('DB check failed: %s'):format(result))
 end
 ```
+- **"Your database does not accept the required authentication method"**: oxmysql and txAdmin use node-mysql2, which supports only `mysql_native_password`, `caching_sha2_password`, `sha256_password` and `mysql_clear_password`. It has no MariaDB `ed25519`/`parsec` (https://github.com/sidorares/node-mysql2/tree/master/lib/auth_plugins). Check with `SELECT user, host, plugin FROM mysql.user;`. Create a dedicated, non-root account: `CREATE USER 'fivem'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('...');` (MariaDB syntax; MySQL uses `IDENTIFIED WITH ... BY`) and grant only the server database: `GRANT ALL ON qbox.* TO 'fivem'@'localhost';`. `user@localhost` and `user@127.0.0.1` are different accounts.
+
 Common messages: `ER_NO_SUCH_TABLE`, `ER_DUP_ENTRY` (unique key — use upsert), `ER_LOCK_DEADLOCK` / `ER_LOCK_WAIT_TIMEOUT` (retry, see optimization §8), `Unknown column`, *"Unable to establish a connection"* (check string, DB running, reserved characters), `AUTH_SWITCH_PLUGIN_ERROR (auth_gssapi_client)` (oxmysql issue #213; typically a Windows MariaDB `root` without password — create a dedicated user with a password).
 
 ## 10. JavaScript / TypeScript

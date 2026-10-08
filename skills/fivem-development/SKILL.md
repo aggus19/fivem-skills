@@ -5,7 +5,7 @@ license: MIT
 compatibility: Scripts need Python 3.8+ (standard library only); natives.py / build_natives_catalog.py need internet on first run. NUI template needs Node 22+.
 metadata:
   author: fivem-skills
-  version: "1.1.0"
+  version: "1.2.0"
   baseline-date: "2026-10-07"
 ---
 
@@ -16,7 +16,7 @@ FXServer Legacy Recommended **35245** / Latest 37150 (clients can't join older b
 
 ## Non-negotiable rules
 
-1. **Server is the authority.** Every net event, callback and export that changes state validates on the server: who (`local src = source` first), allowed (job/ACE/ownership), where (distance), what (types, ranges, whitelists, server-side prices), how often (cooldown). Remove before add. → [security.md](references/security.md)
+1. **Server is the authority.** Every net event, callback and export that changes state validates on the server: who (`local src = source` first), allowed (job/ACE/ownership), where (distance), what (types, ranges, whitelists, server-side prices), how often (cooldown). No yield/`Wait` between the check and the mutations; take/verify first, grant after, and refund or abort atomically on failure. → [security.md](references/security.md)
 2. **Never invent natives, exports or framework APIs.** Verify natives with `python scripts/natives.py show <Name>` (or the catalogue in `assets/natives/`). If a framework function is not in the references, say so and link its docs instead of guessing.
 3. **Detect the stack first.** Read `fxmanifest.lua`, `server.cfg`, `resources/` (or ask): framework, inventory, target, Legacy vs Enhanced, DB engine. Match it; don't mix frameworks. Portable code → bridge pattern ([framework-bridge.md](references/framework-bridge.md)).
 4. **Use current APIs, never deprecated ones.** Check [use-vs-avoid.md](references/use-vs-avoid.md) whenever choosing an API, library or pattern. oxmysql placeholders only; ox_* from `overextended/*`; `RegisterNetEvent`; server-side entity creation; no secrets in client/shared files or `setr`.
@@ -35,11 +35,13 @@ FXServer Legacy Recommended **35245** / Latest 37150 (clients can't join older b
 | txAdmin (recipes, events, env vars, permissions, restarts, whitelist) | [txadmin.md](references/txadmin.md) |
 | Entities, ownership, state bags, routing buckets, entity lockdown, population | [onesync-entities.md](references/onesync-entities.md) |
 | GTA V Enhanced / Cfx Server, migration | [gta5-enhanced.md](references/gta5-enhanced.md) |
+| Testing from an AI agent: RCON, server HTTP endpoints, txAdmin API, community MCP servers (comparison + risks) | [ai-dev-workflow-and-mcp.md](references/ai-dev-workflow-and-mcp.md) |
 
 **Scripting**
 | Task | Read |
 |---|---|
 | New resource / manifest directives / data_file types | [fxmanifest.md](references/fxmanifest.md) |
+| Resource architecture, packaging, release workflow, pre-release gate | [resource-architecture-and-release.md](references/resource-architecture-and-release.md) |
 | CfxLua syntax & extensions, threads, exports, JS/TS, C# | [runtimes.md](references/runtimes.md) |
 | Events (all built-in), callbacks, commands, keybinds, rate limits | [events-and-callbacks.md](references/events-and-callbacks.md) |
 | Natives guide, client vs server, identifiers, pitfalls | [natives.md](references/natives.md) |
@@ -109,6 +111,8 @@ All in `scripts/`, Python 3.8+, standard library only; paths relative to this sk
 | `python scripts/build_natives_catalog.py [--out DIR] [--refresh]` | Regenerate `assets/natives/` (full catalogue) |
 | `python scripts/manifest.py <resource>` | fxmanifest vs files on disk, NUI coverage, side leaks, obsolete keys |
 | `python scripts/audit.py <path> [--min high] [--json]` | Heuristic security/performance/compat scan incl. backdoor signatures and `.cfg` checks (exit 1 on high/critical) |
+| `python scripts/rcon.py [--host H] [--port P] <command...>` | One RCON command over UDP (password from env `FIVEM_RCON_PASSWORD`, never argv; localhost unless `--allow-remote`) |
+| `python scripts/server_info.py [host:port] [--resource NAME] [--getinfo] [--json]` | Summarise `/info.json`, `/players.json`, `/dynamic.json`; check a resource is started |
 | `python scripts/scaffold.py <name> [--out DIR] [--nui]` | New resource: ox_lib + oxmysql + auto-detecting bridge (Qbox/ESX/QBCore/standalone) + optional React/Vite NUI |
 
 ## Workflows
